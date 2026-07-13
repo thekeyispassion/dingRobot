@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+
+# Database
+*.db
+
+# Virtual environment
+myven/
+
+# IDE
+.vscode/
+.idea/
+
+# Test
+.pytest_cache/
+test_report.txt
+
+# OS
+.DS_Store
