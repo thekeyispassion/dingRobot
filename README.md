@@ -337,18 +337,57 @@ ddtalk/
 
 ## 运行测试
 
+### 一键验证
+
+```bash
+python verify.py
+```
+
+运行 4 层检验：数据库初始化 → 自动化测试 → CLI 功能测试 → LLM 配置检查。
+
+### 手动运行
+
 ```bash
 # 运行全部测试
 python -m pytest tests/ -v
 
-# 运行指定模块测试
+# 运行指定模块
 python -m pytest tests/test_booking.py -v
 
 # 生成测试报告
 python -m pytest tests/ -v --tb=short | tee test_report.txt
 ```
 
-当前测试：**91 passed，0 failed，100% 通过率**
+### 测试模块说明
+
+当前共 **91 个测试用例，100% 通过率**，按模块分布：
+
+#### 业务逻辑层测试
+
+| 模块 | 文件 | 用例数 | 测试内容 |
+|------|------|--------|---------|
+| 时间解析 | `test_time_parser.py` | 13 | 时段映射、今天/明天/后天、上午/下午/傍晚、下周一、空输入、乱码输入、房间号干扰 |
+| 房间查询 | `test_room_query.py` | 7 | 空闲查询（空时段/有冲突/部分重叠/边界不重叠）、预约总览、精确/模糊查找房间、不存在房间 |
+| 预约核心 | `test_booking.py` | 8 | 正常预约、冲突检测+推荐、不存在房间、过去日期、时间倒置、相邻时段不互斥、推荐排序、全部满房 |
+| 取消管理 | `test_cancellation.py` | 6 | 查我的预约、无预约用户、取消自己的、取消别人的（权限拒绝）、取消不存在的、重复取消 |
+| 集成测试 | `test_scenarios.py` | 19 | TC01-TC19：端到端覆盖基础预约(3)、空闲查询(2)、总览(1)、模糊时间(3)、冲突推荐(2)、个人管理(3)、边界情况(3)、额外边界(2) |
+
+#### 接口层测试
+
+| 模块 | 文件 | 用例数 | 测试内容 |
+|------|------|--------|---------|
+| 配置管理 | `test_config.py` | 9 | Key 脱敏（正常/短/空）、默认值、占位符检测、YAML 加载（完整/部分）、环境变量覆盖 |
+| LLM 客户端 | `test_llm_client.py` | 18 | 本地意图分类（5 种意图×多条输入）、房间名提取（全名/数字/字母混合/无房间）、LLM 回复解析（JSON/代码块/文本中提取/不可解析） |
+| 钉钉处理 | `test_dingtalk_handler.py` | 11 | 消息解析（OpenClaw 格式/钉钉原始/最简格式/无法识别）、回复格式化（预约成功/冲突推荐/取消/权限拒绝/房间列表/我的预约/无消息错误） |
+
+#### 测试命名规范
+
+所有集成测试使用 TC 编号（TC01-TC19），方法名包含编号和场景描述，方便在测试报告中快速定位：
+
+```
+tests/test_scenarios.py::TestBasicBooking::test_tc01_book_available_room_success
+tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
+```
 
 ---
 
