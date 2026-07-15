@@ -33,17 +33,17 @@ alwaysActive: true
 
 ## 环境信息
 
-- 项目根目录: `/opt/ddtalk`
-- Python 路径: `/opt/ddtalk/myven/bin/python`（如用虚拟环境）或系统 Python
-- 数据库路径: `/opt/ddtalk/db/meeting_rooms.db`
-- 所有命令从项目根目录执行: `cd /opt/ddtalk`
+- 项目根目录: `/opt/ding-robot`
+- Python 路径: `/opt/ding-robot/myven/bin/python`（如用虚拟环境）或系统 Python
+- 数据库路径: `/opt/ding-robot/db/meeting_rooms.db`
+- 所有命令从项目根目录执行: `cd /opt/ding-robot`
 
 ## 运行方式
 
 每条命令的标准格式：
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import sys, json
 from skills.xxx import yyy
 result = yyy(...)
@@ -62,7 +62,7 @@ print(result)
 **用途：** 用户问"现在有哪些空房间"、"明天下午有什么会议室"
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import json
 from skills.room_query import query_available
 print(query_available('DATE', 'START_TIME', 'END_TIME'))
@@ -94,7 +94,7 @@ print(query_available('DATE', 'START_TIME', 'END_TIME'))
 **用途：** 用户问"现在谁在用会议室"、"今天330空着吗"、"当前各房间状态"
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import json
 from skills.room_query import query_today_status
 print(query_today_status())
@@ -127,7 +127,7 @@ print(query_today_status())
 **用途：** 用户问"明天都有谁约了""今天各房间预约情况""后天日程"
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import json
 from skills.room_query import query_day_schedule
 print(query_day_schedule('DATE'))
@@ -157,7 +157,7 @@ print(query_day_schedule('DATE'))
 **用途：** 用户说"帮我约明天下午330"、"订后天上午信电楼501"
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import json
 from skills.booking import book_room
 print(book_room('USER_ID', 'USER_NAME', 'ROOM_NAME', 'DATE', 'START_TIME', 'END_TIME'))
@@ -193,7 +193,7 @@ print(book_room('USER_ID', 'USER_NAME', 'ROOM_NAME', 'DATE', 'START_TIME', 'END_
 **用途：** 用户说"我有哪些预约"、"查看我的预约"
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import json
 from skills.cancellation import my_reservations
 print(my_reservations('USER_ID'))
@@ -217,7 +217,7 @@ print(my_reservations('USER_ID'))
 **用途：** 用户说"取消预约1001"、"帮我把那个预约退了"
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import json
 from skills.cancellation import cancel_reservation
 print(cancel_reservation('USER_ID', RESERVATION_ID))
@@ -245,7 +245,7 @@ print(cancel_reservation('USER_ID', RESERVATION_ID))
 如果用户用了模糊时间表达（"明天下午"、"傍晚"等），可以用这个函数先解析：
 
 ```bash
-cd /opt/ddtalk && python -c "
+cd /opt/ding-robot && python -c "
 import json
 from skills.time_parser import parse_fuzzy_datetime
 print(json.dumps(parse_fuzzy_datetime('明天下午')))
