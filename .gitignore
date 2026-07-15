@@ -21,10 +21,3 @@ test_report.txt
 # OS
 .DS_Store
 
-# 开发文档
-
-docs/
-项目说明.md
-'AI 会议室预约助手.md'
-技术说明.md
-
