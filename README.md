@@ -35,14 +35,7 @@ python3 -m venv myven && source myven/bin/activate
 # 3. 安装依赖
 pip install -r requirements.txt
 
-# 4. 初始化数据库
-python -c "from skills.db_manager import init_db, seed_data; init_db(); seed_data()"
-
-# 5. 配置 LLM（可选，不配也能用本地模式）
-cp config.example.yaml config.yaml
-vim config.yaml  # 填入 API Key
-
-# 6. 启动命令行测试
+# 4. 启动命令行测试
 python cli/test_shell.py
 ```
 
@@ -72,15 +65,6 @@ print('数据库初始化完成')
 python cli/test_shell.py
 ```
 
-**配置 LLM（可选）：**
-```bash
-cp config.example.yaml config.yaml
-# 编辑 config.yaml，填入你的 API Key
-```
-
-不配置 LLM 也能正常运行——系统会自动降级到本地关键词匹配模式。
-
----
 
 ### 云服务器部署
 
@@ -106,23 +90,7 @@ pip install -r requirements.txt
 python -c "from skills.db_manager import init_db, seed_data; init_db(); seed_data()"
 ```
 
-**第四步：配置 LLM API Key**
-```bash
-cp config.example.yaml config.yaml
-vim config.yaml
-```
-
-填写：
-```yaml
-llm:
-  api_key: "sk-xxxxxxxxxxxxx"     # 你的真实 API Key
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  model: "qwen-plus"
-```
-
-> 支持的 LLM 服务商：阿里云百炼（Qwen）、DeepSeek、以及任何兼容 OpenAI `/v1/chat/completions` 协议的服务。
-
-**第五步：注册 Skill 到 OpenClaw**
+**第四步：注册 Skill 到 OpenClaw**
 
 项目根目录的 `SKILL.md` 是 OpenClaw 技能的"说明书"——它告诉 OpenClaw 的 AI：
 
@@ -150,9 +118,9 @@ OpenClaw AI 读取 SKILL.md → 理解意图 → 判断需要"预约会议室"
 返回 JSON 结果 → AI 根据 SKILL.md 的回复风格格式化 → 回复钉钉群
 ```
 
-> **注意：** 在这种模式下，AI 直接理解用户意图并执行命令，`interfaces/llm_client.py` 的意图分类层不再需要——AI 本身就是最强的意图理解器。`llm_client.py` 仅在 CLI 独立模式（`python cli/test_shell.py`）下作为本地关键词降级方案使用。
+> **注意：** OpenClaw 的 AI 本身就是最强的意图理解器——它读取 SKILL.md 后直接判断用户意图并执行对应命令，不需要项目里再调一个外部 LLM 做意图分类。CLI 测试模式下使用内置关键词匹配作为简易替代。
 
-**第六步：对接钉钉机器人**
+**第五步：对接钉钉机器人**
 
 按 `技术说明.md` 完成钉钉开放平台配置：
 1. 创建企业内部机器人应用
@@ -166,34 +134,13 @@ OpenClaw AI 读取 SKILL.md → 理解意图 → 判断需要"预约会议室"
 openclaw config → Channels → DingTalk
 ```
 
-**第七步：启动服务**
+**第六步：启动服务**
 ```bash
 pm2 start "openclaw start" --name ddtalk
 pm2 save
 ```
 
 ---
-
-### 配置说明
-
-| 配置方式 | 优先级 | 适用场景 |
-|---------|--------|---------|
-| `config.yaml` | 最高 | 部署环境 |
-| 环境变量 | 次高 | CI/CD、Docker |
-| 默认值 | 最低 | 本地开发 |
-
-**环境变量：**
-```bash
-export DDTALK_LLM_KEY="sk-xxx"
-export DDTALK_LLM_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-export DDTALK_LLM_MODEL="qwen-plus"
-export DDTALK_DINGTALK_MODE="openclaw"
-```
-
-**安全提醒：**
-- `config.yaml` 已加入 `.gitignore`，不会被提交
-- 不要在代码中硬编码密钥
-- 环境变量方式适合 Docker / Systemd 部署
 
 ---
 
@@ -207,7 +154,7 @@ export DDTALK_DINGTALK_MODE="openclaw"
 ==================================================
   AI 会议室预约助手 — 命令行测试模式
 ==================================================
-  LLM 状态: 本地模式（未检测到 LLM API Key）
+  意图分类: 关键词匹配（生产环境由 OpenClaw AI 替代）
   当前模拟用户: 张三 (user001)
   输入 'help' 查看帮助, 'quit' 退出
 ==================================================
@@ -233,7 +180,6 @@ export DDTALK_DINGTALK_MODE="openclaw"
 |------|------|
 | `help` | 显示帮助 |
 | `users` | 切换模拟用户（张三/李四/王五） |
-| `config` | 查看当前配置状态 |
 | `quit` | 退出 |
 
 ---
@@ -312,37 +258,28 @@ export DDTALK_DINGTALK_MODE="openclaw"
 
 ```
 ddtalk/
-├── SKILL.md                     # OpenClaw 技能说明书（AI 读这个来理解怎么操作）
-├── interfaces/                  # 接口层
-│   ├── config.py                #   配置管理（YAML + 环境变量）
-│   ├── llm_client.py            #   LLM API 客户端（OpenAI 兼容协议）
-│   └── dingtalk_handler.py      #   钉钉消息解析 + 回复格式化
+├── SKILL.md                     # OpenClaw 技能说明书（核心——AI 读这个操作数据库）
 ├── skills/                      # 业务逻辑层
 │   ├── db_manager.py            #   数据库连接 + 初始化
 │   ├── time_parser.py           #   模糊时间 → 标准日期
 │   ├── room_query.py            #   空闲查询 + 预约总览
 │   ├── booking.py               #   预约 + 冲突检测 + 推荐
 │   └── cancellation.py          #   取消预约 + 权限检查
-├── prompts/                     # LLM 提示词
+├── prompts/                     # LLM 提示词（参考用，OpenClaw AI 会读取）
 │   ├── system_prompt.md         #   系统角色定义
 │   ├── intent_classify.md       #   意图分类规则
 │   └── response_format.md       #   回复格式模板
 ├── cli/
-│   └── test_shell.py            # 命令行测试入口
+│   └── test_shell.py            # 命令行测试入口（本地关键词匹配）
 ├── db/
 │   ├── schema.sql               # 建表 SQL
 │   └── seed_data.sql            # 测试种子数据（8 个会议室）
-├── tests/                       # 测试（91 个用例）
+├── tests/                       # 测试（53 个用例）
 │   ├── test_time_parser.py      #   时间解析（13 tests）
 │   ├── test_room_query.py       #   房间查询（7 tests）
 │   ├── test_booking.py          #   预约模块（8 tests）
 │   ├── test_cancellation.py     #   取消管理（6 tests）
-│   ├── test_scenarios.py        #   集成测试（19 tests）
-│   ├── test_config.py           #   配置模块（8 tests）
-│   ├── test_llm_client.py       #   LLM 客户端（15 tests）
-│   └── test_dingtalk_handler.py #   钉钉处理（15 tests）
-├── config.example.yaml          # 配置模板（可提交）
-├── config.yaml                  # 真实配置（gitignore）
+│   └── test_scenarios.py        #   集成测试（19 tests）
 ├── requirements.txt             # 依赖（pytest）
 ├── 项目说明.md                  # 项目流程说明
 ├── AI 会议室预约助手.md          # 需求文档
@@ -378,7 +315,7 @@ python -m pytest tests/ -v --tb=short | tee test_report.txt
 
 ### 测试模块说明
 
-当前共 **91 个测试用例，100% 通过率**，按模块分布：
+当前共 **53 个测试用例，100% 通过率**，按模块分布：
 
 #### 业务逻辑层测试
 
@@ -389,14 +326,6 @@ python -m pytest tests/ -v --tb=short | tee test_report.txt
 | 预约核心 | `test_booking.py` | 8 | 正常预约、冲突检测+推荐、不存在房间、过去日期、时间倒置、相邻时段不互斥、推荐排序、全部满房 |
 | 取消管理 | `test_cancellation.py` | 6 | 查我的预约、无预约用户、取消自己的、取消别人的（权限拒绝）、取消不存在的、重复取消 |
 | 集成测试 | `test_scenarios.py` | 19 | TC01-TC19：端到端覆盖基础预约(3)、空闲查询(2)、总览(1)、模糊时间(3)、冲突推荐(2)、个人管理(3)、边界情况(3)、额外边界(2) |
-
-#### 接口层测试
-
-| 模块 | 文件 | 用例数 | 测试内容 |
-|------|------|--------|---------|
-| 配置管理 | `test_config.py` | 9 | Key 脱敏（正常/短/空）、默认值、占位符检测、YAML 加载（完整/部分）、环境变量覆盖 |
-| LLM 客户端 | `test_llm_client.py` | 18 | 本地意图分类（5 种意图×多条输入）、房间名提取（全名/数字/字母混合/无房间）、LLM 回复解析（JSON/代码块/文本中提取/不可解析） |
-| 钉钉处理 | `test_dingtalk_handler.py` | 11 | 消息解析（OpenClaw 格式/钉钉原始/最简格式/无法识别）、回复格式化（预约成功/冲突推荐/取消/权限拒绝/房间列表/我的预约/无消息错误） |
 
 #### 测试命名规范
 
@@ -435,8 +364,6 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
 └─────────────────────────────────────────┘
 ```
 
-**数据流（OpenClaw 模式）：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → 直接执行 Python 命令 → Skill 操作 SQLite → JSON 结果 → AI 格式化 → 返回钉钉群
-
-**数据流（CLI 独立模式）：** 用户输入 → `interfaces/llm_client` 关键词匹配意图 → `interfaces/dingtalk_handler` 格式化 → Skill 操作 SQLite → 终端输出
+**数据流：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → 直接执行 Python 命令 → Skill 操作 SQLite → JSON 结果 → AI 格式化 → 返回钉钉群
 
 **技术栈：** Python 3.10+ / SQLite / OpenClaw / 钉钉机器人

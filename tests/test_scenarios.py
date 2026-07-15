@@ -40,7 +40,7 @@ class TestBasicBooking:
 
     def test_tc02_book_occupied_room_with_recommendation(self):
         """TC02: 预约已被占用的房间时段 → 返回冲突+推荐替代"""
-        result = json.loads(book_room("user001", "张三", "信电楼330", "2026-07-14", "14:00", "16:00", TEST_DB))
+        result = json.loads(book_room("user001", "张三", "信电楼330", "2026-12-15", "14:00", "16:00", TEST_DB))
         assert result["success"] is False
         assert "recommendations" in result
         assert len(result["recommendations"]) > 0
@@ -67,7 +67,7 @@ class TestAvailabilityQuery:
 
     def test_tc05_query_occupied_period_excludes_conflicts(self):
         """TC05: 有冲突的时段 → 排除被占用的房间"""
-        result = json.loads(query_available("2026-07-14", "14:00", "16:00", TEST_DB))
+        result = json.loads(query_available("2026-12-15", "14:00", "16:00", TEST_DB))
         assert result["success"] is True
         room_names = [r["name"] for r in result["rooms"]]
         assert "信电楼330" not in room_names  # 被占用
@@ -83,7 +83,7 @@ class TestOverview:
 
     def test_tc06_overview_shows_all_rooms_with_status(self):
         """TC06: 查询某时段所有房间状态 → 返回占用/空闲一览"""
-        result = json.loads(query_overview("2026-07-14", "14:00", "16:00", TEST_DB))
+        result = json.loads(query_overview("2026-12-15", "14:00", "16:00", TEST_DB))
         assert result["success"] is True
         assert len(result["rooms"]) == 8
         occupied = [r for r in result["rooms"] if r["status"] == "occupied"]
@@ -133,7 +133,7 @@ class TestConflictRecommendation:
 
     def test_tc10_recommend_similar_room_when_occupied(self):
         """TC10: 目标房间占用 → 推荐容量相近的替代房间"""
-        result = json.loads(recommend_alternatives("信电楼330", "2026-07-14", "14:00", "16:00", TEST_DB))
+        result = json.loads(recommend_alternatives("信电楼330", "2026-12-15", "14:00", "16:00", TEST_DB))
         assert result["success"] is True
         assert len(result["recommendations"]) > 0
         # 信电楼317（同层，20人）应在推荐中
@@ -217,7 +217,7 @@ class TestExtraBoundary:
 
     def test_tc18_exact_boundary_no_conflict(self):
         """TC18: 时间刚好相邻不重叠 → 预约成功"""
-        result = json.loads(book_room("user001", "张三", "信电楼330", "2026-07-14", "16:00", "18:00", TEST_DB))
+        result = json.loads(book_room("user001", "张三", "信电楼330", "2026-12-15", "16:00", "18:00", TEST_DB))
         assert result["success"] is True
 
     def test_tc19_empty_user_no_reservations(self):

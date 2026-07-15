@@ -11,7 +11,7 @@ INSERT OR IGNORE INTO rooms (id, name, building, floor, capacity, facilities, st
 (7, '理学院A305', '理学院', 3, 40, '投影仪,白板,视频会议,音响', 'available', '大型会议室'),
 (8, '理学院B102', '理学院', 1, 60, '投影仪,白板,视频会议,音响,录音', 'available', '学术报告厅');
 
--- 2 条示例预约（用于测试冲突检测）
+-- 2 条示例预约（用于测试冲突检测，使用远期日期避免过期）
 INSERT OR IGNORE INTO reservations (id, room_id, user_id, user_name, date, start_time, end_time, status, created_at) VALUES
-(1, 1, 'user002', '李四', '2026-07-14', '14:00', '16:00', 'active', '2026-07-13T10:00:00'),
-(2, 3, 'user003', '王五', '2026-07-14', '09:00', '11:00', 'active', '2026-07-13T09:00:00');
+(1, 1, 'user002', '李四', '2026-12-15', '14:00', '16:00', 'active', '2026-07-13T10:00:00'),
+(2, 3, 'user003', '王五', '2026-12-15', '09:00', '11:00', 'active', '2026-07-13T09:00:00');

@@ -3,7 +3,7 @@
 
 验证层次：
   L1: 数据库初始化 + 种子数据
-  L2: 全部单元测试（91 个）
+  L2: 全部单元测试（53 个）
   L3: CLI 功能测试
 
 用法: python verify.py
@@ -213,15 +213,6 @@ def test_layer3_cli():
     )
     check("预约总览", "预约" in result.stdout and ("空闲" in result.stdout or "占用" in result.stdout))
 
-    # Test 7: config 命令
-    _reset_db()
-    result = subprocess.run(
-        [sys.executable, "cli/test_shell.py"],
-        input="config\nquit\n",
-        capture_output=True, text=True, timeout=30
-    )
-    check("config 命令", "LLM" in result.stdout and "Model" in result.stdout)
-
     return True
 
 
@@ -229,29 +220,20 @@ def test_layer3_cli():
 # Layer 4: LLM 配置检查（信息展示）
 # ============================================================
 
-def test_layer4_llm_info():
-    banner("Layer 4: LLM 配置状态")
+def test_layer4_info():
+    banner("Layer 4: 架构说明")
 
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from interfaces.config import get_config, mask_key
-
-    config = get_config()
-
-    if config.llm_configured:
-        print(f"  {GREEN}✅ LLM 已配置{RESET}")
-        print(f"     Provider: {config.llm_base_url}")
-        print(f"     Model:    {config.llm_model}")
-        print(f"     API Key:  {mask_key(config.llm_api_key)}")
-    else:
-        print(f"  {YELLOW}⚠️  LLM 未配置 — 将使用本地关键词匹配模式{RESET}")
-        print(f"     复制 config.example.yaml 为 config.yaml 并填入 API Key 即可启用 LLM")
-        print(f"     阿里云百炼: https://dashscope.console.aliyun.com/apiKey")
-        print(f"     DeepSeek:   https://platform.deepseek.com/api_keys")
-        print(f"     配置后重新运行本脚本即可验证 LLM 连通性")
-        print()
-        print(f"  {YELLOW}💡 也可以设置环境变量（不需要 config.yaml）:{RESET}")
-        print(f"     export DDTALK_LLM_KEY=\"sk-xxx\"")
-        print(f"     export DDTALK_LLM_MODEL=\"qwen-plus\"")
+    print(f"  💡 本项目为 OpenClaw Skill——生产环境中：")
+    print(f"     1. OpenClaw AI 读取 SKILL.md 获取操作指南")
+    print(f"     2. AI 直接理解用户意图，执行 Python 命令操作数据库")
+    print(f"     3. 不需要项目内再调用外部 LLM 做意图分类")
+    print()
+    print(f"  🧪 CLI 测试模式使用内置关键词匹配作为简易替代")
+    print(f"     启动: python cli/test_shell.py")
+    print()
+    print(f"  📋 部署到 OpenClaw：")
+    print(f"     ln -s $(pwd) ~/.openclaw/workspace/skills/meeting-room")
+    print(f"     openclaw skills reload")
 
 
 # ============================================================
@@ -273,7 +255,7 @@ def main():
     test_layer1_db()
     test_layer2_pytest()
     test_layer3_cli()
-    test_layer4_llm_info()
+    test_layer4_info()
 
     # 清理
     for f in ["db/_verify_test.db"]:
@@ -287,9 +269,9 @@ def main():
         print(f"  {GREEN}{BOLD}🎉 全部通过！{passed_total}/{total} 项检查通过{RESET}")
         print()
         print(f"  {BOLD}下一步:{RESET}")
-        print(f"  1. 配置 LLM: cp config.example.yaml config.yaml && vim config.yaml")
-        print(f"  2. 启动测试: python cli/test_shell.py")
-        print(f"  3. 部署到服务器: 参考 README.md 部署指南")
+        print(f"  1. 本地测试: python cli/test_shell.py")
+        print(f"  2. 部署 OpenClaw: ln -s $(pwd) ~/.openclaw/workspace/skills/meeting-room")
+        print(f"  3. 参考 README.md 部署指南完成钉钉机器人接入")
     else:
         print(f"  {RED}{BOLD}⚠️  {failed_total}/{total} 项检查失败，请检查上方红色标记{RESET}")
 

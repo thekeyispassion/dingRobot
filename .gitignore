@@ -7,9 +7,6 @@ dist/
 # Database
 *.db
 
-# Sensitive config (contains API keys)
-config.yaml
-
 # Virtual environment
 myven/
 

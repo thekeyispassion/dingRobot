@@ -30,8 +30,8 @@ class TestQueryAvailable:
         assert len(data["rooms"]) == 8
 
     def test_query_available_with_conflict(self):
-        """2026-07-14 14:00-16:00 信电楼330 已被占"""
-        result = query_available("2026-07-14", "14:00", "16:00", TEST_DB)
+        """2026-12-15 14:00-16:00 信电楼330 已被占"""
+        result = query_available("2026-12-15", "14:00", "16:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is True
         room_names = [r["name"] for r in data["rooms"]]
@@ -40,15 +40,15 @@ class TestQueryAvailable:
         assert len(data["rooms"]) == 7
 
     def test_query_available_with_partial_overlap(self):
-        """2026-07-14 15:00-17:00 与 330 的 14:00-16:00 重叠"""
-        result = query_available("2026-07-14", "15:00", "17:00", TEST_DB)
+        """2026-12-15 15:00-17:00 与 330 的 14:00-16:00 重叠"""
+        result = query_available("2026-12-15", "15:00", "17:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         room_names = [r["name"] for r in data["rooms"]]
         assert "信电楼330" not in room_names
 
     def test_query_available_no_overlap(self):
-        """2026-07-14 16:00-18:00 与 330 的 14:00-16:00 刚好不重叠"""
-        result = query_available("2026-07-14", "16:00", "18:00", TEST_DB)
+        """2026-12-15 16:00-18:00 与 330 的 14:00-16:00 刚好不重叠"""
+        result = query_available("2026-12-15", "16:00", "18:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         room_names = [r["name"] for r in data["rooms"]]
         assert "信电楼330" in room_names
@@ -57,7 +57,7 @@ class TestQueryAvailable:
 class TestQueryOverview:
     def test_overview_shows_all_rooms_with_status(self):
         """预约总览应返回所有房间及其占用状态"""
-        result = query_overview("2026-07-14", "14:00", "16:00", TEST_DB)
+        result = query_overview("2026-12-15", "14:00", "16:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is True
         assert len(data["rooms"]) == 8

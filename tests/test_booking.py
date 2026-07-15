@@ -31,7 +31,7 @@ class TestBookRoom:
     def test_book_conflicting_room_with_recommendation(self):
         """预约已被占用的房间时段 → 返回冲突 + 推荐"""
         # 种子数据: user002 已占用 信电楼330 7月14日 14:00-16:00
-        result = book_room("user001", "张三", "信电楼330", "2026-07-14", "14:00", "16:00", TEST_DB)
+        result = book_room("user001", "张三", "信电楼330", "2026-12-15", "14:00", "16:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is False
         assert any(word in data["message"] for word in ["已满", "占用", "冲突", "已被"])
@@ -60,7 +60,7 @@ class TestBookRoom:
     def test_book_exact_adjacent_no_conflict(self):
         """刚好不重叠的时段应预约成功"""
         # 种子数据: 330 14:00-16:00, 预约 16:00-18:00 应成功
-        result = book_room("user001", "张三", "信电楼330", "2026-07-14", "16:00", "18:00", TEST_DB)
+        result = book_room("user001", "张三", "信电楼330", "2026-12-15", "16:00", "18:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is True
 
@@ -68,7 +68,7 @@ class TestBookRoom:
 class TestRecommendAlternatives:
     def test_recommend_same_floor(self):
         """推荐同楼层容量相近的房间"""
-        result = recommend_alternatives("信电楼330", "2026-07-14", "14:00", "16:00", TEST_DB)
+        result = recommend_alternatives("信电楼330", "2026-12-15", "14:00", "16:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is True
         assert len(data["recommendations"]) > 0
