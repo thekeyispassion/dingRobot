@@ -256,10 +256,16 @@ pm2 save
 
 ```
 ddtalk/
-├── SKILL.md                     # 纯工具手册——7 个操作的命令+参数+返回值
-├── SOUL.md                      # 说话风格——10 种场景指南+emoji 规范
 ├── MEMORY.md                    # 身份约束——"你是会议室助手，必须查数据库"
-├── skills/                      # 业务逻辑层
+├── SOUL.md                      # 说话风格——10 种场景指南+emoji 规范
+├── SKILL.md                     # 纯工具手册——7 个操作的命令+参数+返回值
+├── verify.py                    # 一键验证脚本
+├── requirements.txt             # 生产依赖（无，纯标准库）
+├── requirements-dev.txt         # 开发依赖（pytest）
+├── db/
+│   ├── schema.sql               # 建表 SQL
+│   └── seed_data.sql            # 测试种子数据（8 个会议室）
+├── skills/
 │   ├── db_manager.py            #   数据库连接 + 初始化
 │   ├── time_parser.py           #   模糊时间 → 标准日期
 │   ├── room_query.py            #   空闲查询 + 今日状态 + 日程
@@ -267,20 +273,12 @@ ddtalk/
 │   └── cancellation.py          #   取消预约 + 权限检查
 ├── cli/
 │   └── test_shell.py            # 命令行测试入口（本地关键词匹配）
-├── db/
-│   ├── schema.sql               # 建表 SQL
-│   └── seed_data.sql            # 测试种子数据（8 个会议室）
-├── tests/                       # 测试（57 个用例）
-│   ├── test_time_parser.py      #   时间解析（13 tests）
-│   ├── test_room_query.py       #   房间查询（11 tests）
-│   ├── test_booking.py          #   预约模块（8 tests）
-│   ├── test_cancellation.py     #   取消管理（6 tests）
-│   └── test_scenarios.py        #   集成测试（19 tests）
-├── requirements.txt             # 生产依赖（无，纯标准库）
-├── requirements-dev.txt         # 开发依赖（pytest）
-├── 技术说明.md                  # OpenClaw + 钉钉部署教程
-└── docs/
-    └── 开发记录.md              # Vibe Coding 开发记录
+└── tests/                       # 测试（57 个用例）
+    ├── test_time_parser.py      #   时间解析（13 tests）
+    ├── test_room_query.py       #   房间查询（11 tests）
+    ├── test_booking.py          #   预约模块（8 tests）
+    ├── test_cancellation.py     #   取消管理（6 tests）
+    └── test_scenarios.py        #   集成测试（19 tests）
 ```
 
 ---
