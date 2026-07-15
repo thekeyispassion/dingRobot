@@ -12,7 +12,6 @@
 - [部署指南](#部署指南)
   - [本地开发环境](#本地开发环境)
   - [云服务器部署](#云服务器部署)
-  - [配置说明](#配置说明)
 - [使用指南](#使用指南)
   - [命令行测试模式](#命令行测试模式)
   - [钉钉群使用](#钉钉群使用)
@@ -20,6 +19,7 @@
 - [项目结构](#项目结构)
 - [运行测试](#运行测试)
 - [技术架构](#技术架构)
+- [OpenClaw 配置说明](#openclaw-配置说明)
 
 ---
 
@@ -365,3 +365,28 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
 **数据流：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → 直接执行 Python 命令 → Skill 操作 SQLite → JSON 结果 → AI 格式化 → 返回钉钉群
 
 **技术栈：** Python 3.10+ / SQLite / OpenClaw / 钉钉机器人
+
+---
+
+## OpenClaw 配置说明
+
+项目使用三层文件配置 OpenClaw，各司其职：
+
+| 文件 | 大小 | 职责 | 被截风险 |
+|------|------|------|---------|
+| `MEMORY.md` | ~40 行 | 身份定义 + 核心约束（"你是会议室助手，必须查数据库"） | 几乎为零 |
+| `SOUL.md` | ~60 行 | 说话风格（10 种场景指南 + 回复语气 + emoji 规范） | 低 |
+| `SKILL.md` | ~110 行 | 工具手册（7 个操作的命令模板 + 参数 + 返回值） | 中 |
+
+**为什么拆成三个文件？**
+
+1. **上下文超限安全** — 会话长了 SKILL.md 可能被截断，但 MEMORY.md 只有几行，几乎不会被截。即使忘了怎么操作，至少知道不能编造数据
+2. **身份持久性** — MEMORY.md 定义"你是谁"，跨会话生效；SKILL.md 只是"工具说明书"
+3. **关注点分离** — 改说话风格只改 SOUL.md，改命令只改 SKILL.md，互不干扰
+
+**部署：** 三个文件放在项目根目录，OpenClaw 自动加载。软链接到 skills 目录后即可使用：
+
+```bash
+ln -s /opt/ding-robot ~/.openclaw/workspace/skills/meeting-room
+openclaw skills reload
+```
