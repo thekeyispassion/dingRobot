@@ -1,1 +1,2 @@
-pytest>=7.0.0
+# 生产依赖（空——项目仅使用 Python 标准库）
+# sqlite3, json, os, re, urllib, datetime 均为内置模块
