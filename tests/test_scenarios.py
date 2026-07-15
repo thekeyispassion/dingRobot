@@ -4,7 +4,7 @@ import pytest
 import json
 import os
 from skills.db_manager import init_db, seed_data, get_connection
-from skills.room_query import query_available, query_overview, get_room_by_name
+from skills.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
 from skills.booking import book_room, recommend_alternatives
 from skills.cancellation import my_reservations, cancel_reservation
 from skills.time_parser import parse_fuzzy_datetime
@@ -78,18 +78,28 @@ class TestAvailabilityQuery:
 # 预约总览 (1 个用例)
 # ============================================================
 
-class TestOverview:
-    """TC06: 预约总览"""
+class TestDaySchedule:
+    """TC06: 预约日程"""
 
-    def test_tc06_overview_shows_all_rooms_with_status(self):
-        """TC06: 查询某时段所有房间状态 → 返回占用/空闲一览"""
-        result = json.loads(query_overview("2026-12-15", "14:00", "16:00", TEST_DB))
+    def test_tc06_day_schedule_shows_all_bookings(self):
+        """TC06: 查询某天所有房间的预约日程 → 返回每间房的 booking 时间线"""
+        result = json.loads(query_day_schedule("2026-12-15", TEST_DB))
+        assert result["success"] is True
+        assert result["total_bookings"] == 2
+        assert len(result["rooms"]) == 8
+        # 信电楼330 有一个预约，包含具体时间
+        room330 = next(r for r in result["rooms"] if r["name"] == "信电楼330")
+        assert room330["booking_count"] == 1
+        assert room330["bookings"][0]["start_time"] == "14:00"
+
+    def test_tc06b_today_status_returns_rooms(self):
+        """TC06b: 查询今日实时状态 → 每个房间有 status 和 upcoming"""
+        result = json.loads(query_today_status(TEST_DB))
         assert result["success"] is True
         assert len(result["rooms"]) == 8
-        occupied = [r for r in result["rooms"] if r["status"] == "occupied"]
-        available = [r for r in result["rooms"] if r["status"] == "available"]
-        assert len(occupied) >= 1
-        assert len(available) >= 1
+        assert "current_time" in result
+        for r in result["rooms"]:
+            assert r["status"] in ("available", "occupied")
 
 
 # ============================================================

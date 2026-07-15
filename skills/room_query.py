@@ -1,4 +1,4 @@
-"""房间查询模块 — 空闲查询 & 预约总览"""
+"""房间查询模块 — 空闲查询、今日实时状态、日程查询"""
 
 import json
 from skills.db_manager import get_connection
@@ -62,40 +62,62 @@ def query_available(date: str, start_time: str, end_time: str, db_path: str = No
         conn.close()
 
 
-def query_overview(date: str, start_time: str, end_time: str, db_path: str = None) -> str:
-    """查询所有房间在指定时段的预约情况
+def query_today_status(db_path: str = None) -> str:
+    """查询今天每个房间的实时状态——此刻谁在用、之后谁约了
 
-    Args:
-        date: 日期 YYYY-MM-DD
-        start_time: 开始时间 HH:MM
-        end_time: 结束时间 HH:MM
-        db_path: 数据库路径
+    不需要参数，自动使用当前日期和时间。
 
     Returns:
-        JSON: {"success": true, "rooms": [{"name": ..., "status": "available"|"occupied", "reservation": ...}]}
+        JSON: {
+            "success": true,
+            "date": "2026-07-15",
+            "current_time": "15:30",
+            "rooms": [
+                {
+                    "name": "信电楼330", "building": "信电楼", "floor": 3, "capacity": 30,
+                    "status": "occupied",           # "occupied" | "available"
+                    "current": {                    # 正在进行的预约（status=occupied 时有值）
+                        "user_name": "李四",
+                        "start_time": "14:00",
+                        "end_time": "16:00",
+                        "reservation_id": 1
+                    },
+                    "upcoming": [                   # 今天后续的预约（按时间排序）
+                        {"user_name": "王五", "start_time": "16:00", "end_time": "18:00", "reservation_id": 5}
+                    ]
+                },
+                ...
+            ]
+        }
     """
+    from datetime import datetime
+
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    now_str = now.strftime("%H:%M")
+
     conn = get_connection(db_path)
     try:
-        # 查询该时段所有 active 预约
+        # 查询今天所有 active 预约
         reservations = conn.execute(
-            "SELECT room_id, user_name, start_time, end_time, id as reservation_id "
+            "SELECT id, room_id, user_name, start_time, end_time "
             "FROM reservations "
             "WHERE date = ? AND status = 'active' "
-            "  AND start_time < ? AND end_time > ?",
-            (date, end_time, start_time),
+            "ORDER BY start_time",
+            (today_str,),
         ).fetchall()
 
-        # 建立 room_id → 预约信息映射
-        occupied_map = {}
+        # 按房间分组
+        room_bookings = {}
         for res in reservations:
-            occupied_map[res["room_id"]] = {
+            room_bookings.setdefault(res["room_id"], []).append({
                 "user_name": res["user_name"],
                 "start_time": res["start_time"],
                 "end_time": res["end_time"],
-                "reservation_id": res["reservation_id"],
-            }
+                "reservation_id": res["id"],
+            })
 
-        # 查询所有可用房间
+        # 查询所有房间
         rooms = conn.execute(
             "SELECT id, name, building, floor, capacity, facilities "
             "FROM rooms WHERE status = 'available' ORDER BY building, floor, name"
@@ -103,31 +125,113 @@ def query_overview(date: str, start_time: str, end_time: str, db_path: str = Non
 
         room_list = []
         for r in rooms:
-            if r["id"] in occupied_map:
-                room_list.append({
-                    "name": r["name"],
-                    "building": r["building"],
-                    "floor": r["floor"],
-                    "capacity": r["capacity"],
-                    "status": "occupied",
-                    "reservation": occupied_map[r["id"]],
-                })
-            else:
-                room_list.append({
-                    "name": r["name"],
-                    "building": r["building"],
-                    "floor": r["floor"],
-                    "capacity": r["capacity"],
-                    "status": "available",
-                    "reservation": None,
-                })
+            bookings = room_bookings.get(r["id"], [])
+
+            # 找正在进行的预约
+            current = None
+            upcoming = []
+            for b in bookings:
+                if b["start_time"] <= now_str < b["end_time"]:
+                    current = b
+                elif b["start_time"] > now_str:
+                    upcoming.append(b)
+
+            room_list.append({
+                "name": r["name"],
+                "building": r["building"],
+                "floor": r["floor"],
+                "capacity": r["capacity"],
+                "status": "occupied" if current else "available",
+                "current": current,
+                "upcoming": upcoming,
+            })
+
+        return json.dumps({
+            "success": True,
+            "date": today_str,
+            "current_time": now_str,
+            "rooms": room_list,
+        }, ensure_ascii=False)
+    finally:
+        conn.close()
+
+
+def query_day_schedule(date: str, db_path: str = None) -> str:
+    """查询某天所有房间的预约日程——每个房间今天的预约时间线
+
+    Args:
+        date: 日期 YYYY-MM-DD（"今天" 也可以传具体日期）
+        db_path: 数据库路径
+
+    Returns:
+        JSON: {
+            "success": true,
+            "date": "2026-07-15",
+            "rooms": [
+                {
+                    "name": "信电楼330", "building": "信电楼", "floor": 3, "capacity": 30,
+                    "bookings": [
+                        {"user_name": "李四", "start_time": "09:00", "end_time": "11:00", "reservation_id": 1},
+                        {"user_name": "王五", "start_time": "14:00", "end_time": "16:00", "reservation_id": 2}
+                    ],
+                    "booking_count": 2
+                },
+                {
+                    "name": "信电楼317", ...,
+                    "bookings": [],           # 今天没人约——全天空闲
+                    "booking_count": 0
+                },
+                ...
+            ],
+            "total_bookings": 5               # 当天预约总数
+        }
+    """
+    conn = get_connection(db_path)
+    try:
+        # 查询该日期所有 active 预约
+        reservations = conn.execute(
+            "SELECT id, room_id, user_name, start_time, end_time "
+            "FROM reservations "
+            "WHERE date = ? AND status = 'active' "
+            "ORDER BY start_time",
+            (date,),
+        ).fetchall()
+
+        # 按房间分组
+        room_bookings = {}
+        total = 0
+        for res in reservations:
+            room_bookings.setdefault(res["room_id"], []).append({
+                "user_name": res["user_name"],
+                "start_time": res["start_time"],
+                "end_time": res["end_time"],
+                "reservation_id": res["id"],
+            })
+            total += 1
+
+        # 查询所有房间
+        rooms = conn.execute(
+            "SELECT id, name, building, floor, capacity, facilities "
+            "FROM rooms WHERE status = 'available' ORDER BY building, floor, name"
+        ).fetchall()
+
+        room_list = []
+        for r in rooms:
+            bookings = room_bookings.get(r["id"], [])
+            room_list.append({
+                "name": r["name"],
+                "building": r["building"],
+                "floor": r["floor"],
+                "capacity": r["capacity"],
+                "bookings": bookings,
+                "booking_count": len(bookings),
+            })
 
         return json.dumps({
             "success": True,
             "date": date,
-            "start_time": start_time,
-            "end_time": end_time,
             "rooms": room_list,
+            "total_bookings": total,
         }, ensure_ascii=False)
     finally:
         conn.close()

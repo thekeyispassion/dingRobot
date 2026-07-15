@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from skills.db_manager import init_db, seed_data
 from skills.time_parser import parse_fuzzy_datetime
-from skills.room_query import query_available, query_overview, get_room_by_name
+from skills.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
 from skills.booking import book_room, recommend_alternatives
 from skills.cancellation import my_reservations, cancel_reservation
 
@@ -42,7 +42,7 @@ def classify_intent(text: str) -> dict:
     """基于关键词的简易意图分类
 
     Returns:
-        {"intent": "book"|"query_available"|"query_overview"|"query_my"|"cancel"|"unknown",
+        {"intent": "book"|"query_available"|"today_status"|"day_schedule"|"query_my"|"cancel"|"unknown",
          "params": {"room_name": ..., "reservation_id": ...}}
     """
     # 取消预约
@@ -58,10 +58,15 @@ def classify_intent(text: str) -> dict:
     if any(kw in text for kw in my_keywords):
         return {"intent": "query_my", "params": {}}
 
-    # 预约总览
-    overview_keywords = ["预约情况", "占用情况", "都谁约了", "全部预约", "一览", "总览"]
-    if any(kw in text for kw in overview_keywords):
-        return {"intent": "query_overview", "params": {"room_name": _extract_room_name(text)}}
+    # 今日实时状态（"现在""今天" + 状态/情况/谁在用）
+    today_status_keywords = ["现在谁在", "今天谁在", "当前状态", "现在状态", "在用"]
+    if any(kw in text for kw in today_status_keywords):
+        return {"intent": "today_status", "params": {}}
+
+    # 某天预约日程（"XX的预约情况""明天谁约了""今天日程"）
+    schedule_keywords = ["预约情况", "占用情况", "都谁约了", "全部预约", "一览", "总览", "谁约了", "日程", "预约了"]
+    if any(kw in text for kw in schedule_keywords):
+        return {"intent": "day_schedule", "params": {}}
 
     # 查询空闲
     available_keywords = ["空房间", "空闲", "有哪些", "哪些空着", "空的", "可用的"]
@@ -118,16 +123,25 @@ def handle_command(user_id: str, user_name: str, text: str) -> str:
         return f"❌ {result['message']}"
 
     # === 时间解析 ===
-    time_info = parse_fuzzy_datetime(text)
-    if "error" in time_info:
-        if intent in ("query_my", "cancel"):
-            pass
+    # today_status 不需要时间参数——它用当前时间
+    if intent == "today_status":
+        booking_date = date.today().isoformat()
+        start_time = ""
+        end_time = ""
+    else:
+        time_info = parse_fuzzy_datetime(text)
+        if "error" in time_info:
+            if intent in ("query_my", "cancel", "day_schedule"):
+                # day_schedule 时间解析失败时默认用今天
+                booking_date = date.today().isoformat()
+                start_time = ""
+                end_time = ""
+            else:
+                return f"⏰ 时间解析失败：{time_info['error']}\n请尝试更明确的时间表达，如「明天下午」"
         else:
-            return f"⏰ 时间解析失败：{time_info['error']}\n请尝试更明确的时间表达，如「明天下午」"
-
-    booking_date = time_info.get("date", date.today().isoformat())
-    start_time = time_info.get("start_time", "14:00")
-    end_time = time_info.get("end_time", "18:00")
+            booking_date = time_info.get("date", date.today().isoformat())
+            start_time = time_info.get("start_time", "14:00")
+            end_time = time_info.get("end_time", "18:00")
 
     # === 查询空闲 ===
     if intent == "query_available":
@@ -148,24 +162,36 @@ def handle_command(user_id: str, user_name: str, text: str) -> str:
             return "\n".join(lines)
         return f"❌ 查询失败：{result.get('message', '未知错误')}"
 
-    # === 预约总览 ===
-    if intent == "query_overview":
-        result = json.loads(query_overview(booking_date, start_time, end_time))
+    # === 今日实时状态 ===
+    if intent == "today_status":
+        result = json.loads(query_today_status())
         if result["success"]:
-            lines = [f"📋 {booking_date} {start_time}-{end_time} 预约情况：", ""]
-            available_rooms = [r for r in result["rooms"] if r["status"] == "available"]
-            occupied_rooms = [r for r in result["rooms"] if r["status"] == "occupied"]
+            lines = [f"📋 今日实时状态（{result['current_time']}）：", ""]
+            for r in result["rooms"]:
+                if r["status"] == "occupied":
+                    cur = r["current"]
+                    lines.append(f"  🔴 {r['name']}（{r['capacity']}人）— {cur['user_name']} 使用中（{cur['start_time']}-{cur['end_time']}）")
+                else:
+                    upcoming_str = ""
+                    if r["upcoming"]:
+                        next_b = r["upcoming"][0]
+                        upcoming_str = f"  ⏰ {next_b['start_time']} {next_b['user_name']} 预约"
+                    lines.append(f"  🟢 {r['name']}（{r['capacity']}人）— 空闲{upcoming_str}")
+            return "\n".join(lines)
+        return f"❌ 查询失败：{result.get('message', '未知错误')}"
 
-            if available_rooms:
-                lines.append("🟢 空闲：")
-                for r in available_rooms:
-                    lines.append(f"  • {r['name']}（{r['capacity']}人）")
-                lines.append("")
-            if occupied_rooms:
-                lines.append("🔴 已占用：")
-                for r in occupied_rooms:
-                    res = r["reservation"]
-                    lines.append(f"  • {r['name']} — {res['user_name']}（{res['start_time']}-{res['end_time']}）")
+    # === 某天预约日程 ===
+    if intent == "day_schedule":
+        result = json.loads(query_day_schedule(booking_date))
+        if result["success"]:
+            lines = [f"📋 {booking_date} 预约日程（共 {result['total_bookings']} 个预约）：", ""]
+            for r in result["rooms"]:
+                if r["booking_count"] > 0:
+                    lines.append(f"🏢 {r['name']}（{r['capacity']}人）：")
+                    for b in r["bookings"]:
+                        lines.append(f"  • {b['start_time']}-{b['end_time']}  {b['user_name']}（ID: {b['reservation_id']}）")
+                else:
+                    lines.append(f"🏢 {r['name']}（{r['capacity']}人）— 全天可约")
                 lines.append("")
             return "\n".join(lines)
         return f"❌ 查询失败：{result.get('message', '未知错误')}"
@@ -191,7 +217,8 @@ def handle_command(user_id: str, user_name: str, text: str) -> str:
 您可以这样对我说：
   • "帮我约明天下午信电楼330"
   • "现在有哪些空房间？"
-  • "明天下午各会议室的预约情况"
+  • "现在谁在用会议室？"
+  • "明天有哪些预约？"
   • "查看我的预约"
   • "取消预约 1001"
 
@@ -211,8 +238,10 @@ def show_help():
    示例：现在有哪些空房间？
    示例：明天下午有哪些会议室空着？
 
-3. 预约总览
-   示例：明天下午各会议室的预约情况
+3. 今日实时状态
+   示例：现在谁在用会议室？
+4. 某天预约日程
+   示例：明天各会议室的预约情况
 
 4. 我的预约
    示例：查看我的预约

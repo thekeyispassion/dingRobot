@@ -26,7 +26,7 @@ alwaysActive: true
 |------|------------|---------|
 | 预约会议室 | 约、定、订、预约、帮我订、book | 解析时间+房间 → 执行 `book_room` |
 | 查询空闲 | 空房间、空闲、有哪些、空着 | 解析时间 → 执行 `query_available` |
-| 预约总览 | 预约情况、占用、谁约了、一览 | 解析时间 → 执行 `query_overview` |
+| 今日状态 | 现在谁在、当前状态、在用 | 执行 `query_today_status` |\n| 预约日程 | 预约情况、谁约了、日程、一览 | 解析日期 → 执行 `query_day_schedule` |
 | 我的预约 | 我的预约、我约了、我订了 | 执行 `my_reservations` |
 | 取消预约 | 取消、退订、不要了 | 有 ID 直接取消，无 ID 先查再确认 |
 | 询问房间 | 有哪些房间、会议室列表、330 | 执行数据库查询，不凭记忆 |
@@ -89,31 +89,70 @@ print(query_available('DATE', 'START_TIME', 'END_TIME'))
 }
 ```
 
-### 2. 预约总览
+### 2. 今日实时状态
 
-**用途：** 用户问"明天下午各会议室的预约情况"、"330都有谁在用"
+**用途：** 用户问"现在谁在用会议室"、"今天330空着吗"、"当前各房间状态"
 
 ```bash
 cd /opt/ddtalk && python -c "
 import json
-from skills.room_query import query_overview
-print(query_overview('DATE', 'START_TIME', 'END_TIME'))
+from skills.room_query import query_today_status
+print(query_today_status())
 "
 ```
+
+不需要传日期和时间——函数自动用当前时间。
 
 **返回示例：**
 ```json
 {
   "success": true,
+  "date": "2026-07-15",
+  "current_time": "15:30",
   "rooms": [
-    {"name": "信电楼330", "capacity": 30, "status": "occupied", "reservation": {"user_name": "李四", "start_time": "14:00", "end_time": "16:00"}},
-    {"name": "信电楼317", "capacity": 20, "status": "available", "reservation": null},
+    {"name": "信电楼330", "status": "occupied", "current": {"user_name": "李四", "start_time": "14:00", "end_time": "16:00"}, "upcoming": []},
+    {"name": "信电楼317", "status": "available", "current": null, "upcoming": [{"user_name": "王五", "start_time": "16:00", "end_time": "18:00"}]},
     ...
   ]
 }
 ```
 
-### 3. 预约会议室
+每个房间有两个关键字段：
+- `status`: "occupied"（正在使用中）/ "available"（现在空着）
+- `current`: 正在进行的预约（是谁、到几点）
+- `upcoming`: 今天后续的预约列表（虽然现在空着，但几点有人约了）
+
+### 3. 某天预约日程
+
+**用途：** 用户问"明天都有谁约了""今天各房间预约情况""后天日程"
+
+```bash
+cd /opt/ddtalk && python -c "
+import json
+from skills.room_query import query_day_schedule
+print(query_day_schedule('DATE'))
+"
+```
+
+**参数：** `DATE`: 日期 `YYYY-MM-DD`
+
+**返回示例：**
+```json
+{
+  "success": true,
+  "date": "2026-07-15",
+  "rooms": [
+    {"name": "信电楼330", "bookings": [{"user_name": "李四", "start_time": "09:00", "end_time": "11:00"}, {"user_name": "王五", "start_time": "14:00", "end_time": "16:00"}], "booking_count": 2},
+    {"name": "信电楼317", "bookings": [], "booking_count": 0},
+    ...
+  ],
+  "total_bookings": 5
+}
+```
+
+每个房间展示当天所有预约的时间线。`booking_count == 0` 表示该房间全天可约。
+
+### 4. 预约会议室
 
 **用途：** 用户说"帮我约明天下午330"、"订后天上午信电楼501"
 
@@ -149,7 +188,7 @@ print(book_room('USER_ID', 'USER_NAME', 'ROOM_NAME', 'DATE', 'START_TIME', 'END_
 
 **重要：** 如果返回 `"success": false` 且包含 `"recommendations"`，直接把 `message` 展示给用户——里面已经包含了推荐信息。
 
-### 4. 查询我的预约
+### 5. 查询我的预约
 
 **用途：** 用户说"我有哪些预约"、"查看我的预约"
 
@@ -173,7 +212,7 @@ print(my_reservations('USER_ID'))
 }
 ```
 
-### 5. 取消预约
+### 6. 取消预约
 
 **用途：** 用户说"取消预约1001"、"帮我把那个预约退了"
 
@@ -201,7 +240,7 @@ print(cancel_reservation('USER_ID', RESERVATION_ID))
 
 > 如果用户只说"取消"但没提供预约 ID，先执行"查询我的预约"，把结果列出来让用户选。
 
-### 6. 时间解析辅助（可选）
+### 7. 时间解析辅助（可选）
 
 如果用户用了模糊时间表达（"明天下午"、"傍晚"等），可以用这个函数先解析：
 

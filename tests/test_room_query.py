@@ -3,7 +3,7 @@ import pytest
 import json
 import os
 from skills.db_manager import init_db, seed_data, DEFAULT_DB_PATH
-from skills.room_query import query_available, query_overview, get_room_by_name
+from skills.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
 
 TEST_DB = "db/test_room_query.db"
 
@@ -54,19 +54,48 @@ class TestQueryAvailable:
         assert "信电楼330" in room_names
 
 
-class TestQueryOverview:
-    def test_overview_shows_all_rooms_with_status(self):
-        """预约总览应返回所有房间及其占用状态"""
-        result = query_overview("2026-12-15", "14:00", "16:00", TEST_DB)
+class TestTodayStatus:
+    def test_today_status_returns_all_rooms(self):
+        """今日状态应返回所有 8 个房间"""
+        result = query_today_status(TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is True
         assert len(data["rooms"]) == 8
-        # 找到信电楼330，它应该是 occupied
+        # 每个房间都有 status 和 upcoming 字段
+        for r in data["rooms"]:
+            assert r["status"] in ("available", "occupied")
+            assert isinstance(r["upcoming"], list)
+
+    def test_today_status_has_current_time(self):
+        """今日状态包含当前时间"""
+        result = query_today_status(TEST_DB)
+        data = json.loads(result) if isinstance(result, str) else result
+        assert "current_time" in data
+        assert "date" in data
+
+
+class TestDaySchedule:
+    def test_day_schedule_shows_bookings(self):
+        """日程查询——2026-12-15 有 2 个预约"""
+        result = query_day_schedule("2026-12-15", TEST_DB)
+        data = json.loads(result) if isinstance(result, str) else result
+        assert data["success"] is True
+        assert data["total_bookings"] == 2
+        # 信电楼330 有一个预约
         room330 = next(r for r in data["rooms"] if r["name"] == "信电楼330")
-        assert room330["status"] == "occupied"
-        # 信电楼317 应该是 available
+        assert room330["booking_count"] == 1
+        assert room330["bookings"][0]["user_name"] == "李四"
+        # 信电楼317 没有预约
         room317 = next(r for r in data["rooms"] if r["name"] == "信电楼317")
-        assert room317["status"] == "available"
+        assert room317["booking_count"] == 0
+
+    def test_day_schedule_empty_day(self):
+        """没有预约的日期——所有房间 booking_count 为 0"""
+        result = query_day_schedule("2026-12-20", TEST_DB)
+        data = json.loads(result) if isinstance(result, str) else result
+        assert data["success"] is True
+        assert data["total_bookings"] == 0
+        assert all(r["booking_count"] == 0 for r in data["rooms"])
 
 
 class TestGetRoomByName:
