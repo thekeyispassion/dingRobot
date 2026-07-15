@@ -1,35 +1,10 @@
 ---
 name: meeting-room
-description: 学院会议室预约助手，支持查询空闲房间、预约会议室、查看预约情况、取消预约等操作。通过 Python 脚本操作 SQLite 数据库。
+description: 学院会议室预约助手，通过 Python 脚本操作 SQLite 数据库。查询空闲、预约、取消、日程查看。
 alwaysActive: true
 ---
 
-# 会议室预约助手
-
-## ⚠️ 核心约束（必须遵守）
-
-**你是学院会议室系统的唯一操作入口。所有会议室相关数据都存在 SQLite 数据库中，你必须通过执行 Python 命令来获取真实数据。严禁靠记忆、猜测或编造任何会议室状态、预约记录、房间信息。**
-
-具体规则：
-
-1. **查数据必须执行命令** — 用户问你"有哪些空房间""我的预约""330有没有人用"，你必须执行 `python -c "from skills.room_query import ..."` 来查询数据库，不能凭记忆回答
-2. **预约必须执行命令** — 用户要预约会议室，你必须执行 `python -c "from skills.booking import book_room(...)"` 来写入数据库，不能口头确认
-3. **取消必须执行命令** — 用户要取消预约，你必须执行 `python -c "from skills.cancellation import cancel_reservation(...)"` 并检查返回结果中的权限信息
-4. **你不知道数据库里有什么** — 每次对话都是新的，数据库状态可能已经被其他人改变。永远先查再答
-5. **用户身份从消息中获取** — `USER_ID` 和 `USER_NAME` 必须从钉钉消息中提取，不能编造
-
-## 触发规则
-
-当用户消息涉及以下任一场景时，**自动触发本技能**，不需要用户显式调用：
-
-| 场景 | 关键词/意图 | 执行操作 |
-|------|------------|---------|
-| 预约会议室 | 约、定、订、预约、帮我订、book | 解析时间+房间 → 执行 `book_room` |
-| 查询空闲 | 空房间、空闲、有哪些、空着 | 解析时间 → 执行 `query_available` |
-| 今日状态 | 现在谁在、当前状态、在用 | 执行 `query_today_status` |\n| 预约日程 | 预约情况、谁约了、日程、一览 | 解析日期 → 执行 `query_day_schedule` |
-| 我的预约 | 我的预约、我约了、我订了 | 执行 `my_reservations` |
-| 取消预约 | 取消、退订、不要了 | 有 ID 直接取消，无 ID 先查再确认 |
-| 询问房间 | 有哪些房间、会议室列表、330 | 执行数据库查询，不凭记忆 |
+# 会议室预约助手 — 操作手册
 
 ## 环境信息
 
@@ -38,28 +13,38 @@ alwaysActive: true
 - 数据库路径: `/opt/ding-robot/db/meeting_rooms.db`
 - 所有命令从项目根目录执行: `cd /opt/ding-robot`
 
-## 运行方式
-
-每条命令的标准格式：
+## 命令格式
 
 ```bash
 cd /opt/ding-robot && python -c "
-import sys, json
+import json
 from skills.xxx import yyy
 result = yyy(...)
 print(result)
 "
 ```
 
-> 所有 Skill 函数返回 JSON 字符串，`print()` 输出后你可以直接读取结果。
+> 所有函数返回 JSON 字符串，`print()` 输出后读取结果。
+
+## 触发规则
+
+当用户消息涉及以下场景时，自动触发：
+
+| 场景 | 关键词/意图 | 执行操作 |
+|------|------------|---------|
+| 预约会议室 | 约、定、订、预约、帮我订、book | 解析时间+房间 → `book_room` |
+| 查询空闲 | 空房间、空闲、有哪些、空着 | 解析时间 → `query_available` |
+| 今日状态 | 现在谁在、当前状态、在用 | `query_today_status` |
+| 预约日程 | 预约情况、谁约了、日程、一览 | 解析日期 → `query_day_schedule` |
+| 我的预约 | 我的预约、我约了、我订了 | `my_reservations` |
+| 取消预约 | 取消、退订、不要了 | 有 ID 直接取消，无 ID 先查再确认 |
+| 询问房间 | 有哪些房间、会议室列表 | 执行数据库查询 |
 
 ---
 
 ## 可用操作
 
 ### 1. 查询空闲房间
-
-**用途：** 用户问"现在有哪些空房间"、"明天下午有什么会议室"
 
 ```bash
 cd /opt/ding-robot && python -c "
@@ -69,29 +54,11 @@ print(query_available('DATE', 'START_TIME', 'END_TIME'))
 "
 ```
 
-**参数：**
-- `DATE`: 日期 `YYYY-MM-DD`
-- `START_TIME`: 开始时间 `HH:MM`
-- `END_TIME`: 结束时间 `HH:MM`
+**参数：** `DATE` YYYY-MM-DD, `START_TIME` HH:MM, `END_TIME` HH:MM
 
-**返回示例：**
-```json
-{
-  "success": true,
-  "date": "2026-07-15",
-  "start_time": "14:00",
-  "end_time": "18:00",
-  "rooms": [
-    {"id": 2, "name": "信电楼317", "building": "信电楼", "floor": 3, "capacity": 20, "facilities": "投影仪,白板"},
-    ...
-  ],
-  "count": 7
-}
-```
+**返回：** `{"success": true, "rooms": [{"name": "信电楼317", "building": "信电楼", "floor": 3, "capacity": 20, "facilities": "投影仪,白板"}, ...], "count": 7}`
 
 ### 2. 今日实时状态
-
-**用途：** 用户问"现在谁在用会议室"、"今天330空着吗"、"当前各房间状态"
 
 ```bash
 cd /opt/ding-robot && python -c "
@@ -101,30 +68,15 @@ print(query_today_status())
 "
 ```
 
-不需要传日期和时间——函数自动用当前时间。
+无需参数，自动使用当前时间。
 
-**返回示例：**
-```json
-{
-  "success": true,
-  "date": "2026-07-15",
-  "current_time": "15:30",
-  "rooms": [
-    {"name": "信电楼330", "status": "occupied", "current": {"user_name": "李四", "start_time": "14:00", "end_time": "16:00"}, "upcoming": []},
-    {"name": "信电楼317", "status": "available", "current": null, "upcoming": [{"user_name": "王五", "start_time": "16:00", "end_time": "18:00"}]},
-    ...
-  ]
-}
-```
+**返回：** `{"success": true, "current_time": "15:30", "rooms": [{"name": "信电楼330", "status": "occupied", "current": {"user_name": "李四", "start_time": "14:00", "end_time": "16:00"}, "upcoming": []}, {"name": "信电楼317", "status": "available", "current": null, "upcoming": [{"user_name": "王五", "start_time": "16:00"}]}]}`
 
-每个房间有两个关键字段：
-- `status`: "occupied"（正在使用中）/ "available"（现在空着）
-- `current`: 正在进行的预约（是谁、到几点）
-- `upcoming`: 今天后续的预约列表（虽然现在空着，但几点有人约了）
+- `status`: "occupied" / "available"
+- `current`: 正在进行的预约（谁、到几点）
+- `upcoming`: 今天后续的预约列表
 
 ### 3. 某天预约日程
-
-**用途：** 用户问"明天都有谁约了""今天各房间预约情况""后天日程"
 
 ```bash
 cd /opt/ding-robot && python -c "
@@ -134,27 +86,13 @@ print(query_day_schedule('DATE'))
 "
 ```
 
-**参数：** `DATE`: 日期 `YYYY-MM-DD`
+**参数：** `DATE` YYYY-MM-DD
 
-**返回示例：**
-```json
-{
-  "success": true,
-  "date": "2026-07-15",
-  "rooms": [
-    {"name": "信电楼330", "bookings": [{"user_name": "李四", "start_time": "09:00", "end_time": "11:00"}, {"user_name": "王五", "start_time": "14:00", "end_time": "16:00"}], "booking_count": 2},
-    {"name": "信电楼317", "bookings": [], "booking_count": 0},
-    ...
-  ],
-  "total_bookings": 5
-}
-```
+**返回：** `{"success": true, "date": "2026-07-15", "rooms": [{"name": "信电楼330", "bookings": [{"user_name": "李四", "start_time": "09:00", "end_time": "11:00"}], "booking_count": 1}, {"name": "信电楼317", "bookings": [], "booking_count": 0}], "total_bookings": 5}`
 
-每个房间展示当天所有预约的时间线。`booking_count == 0` 表示该房间全天可约。
+`booking_count == 0` = 全天可约。
 
 ### 4. 预约会议室
-
-**用途：** 用户说"帮我约明天下午330"、"订后天上午信电楼501"
 
 ```bash
 cd /opt/ding-robot && python -c "
@@ -164,33 +102,15 @@ print(book_room('USER_ID', 'USER_NAME', 'ROOM_NAME', 'DATE', 'START_TIME', 'END_
 "
 ```
 
-**参数：**
-- `USER_ID`: 用户钉钉 ID（从消息中获取）
-- `USER_NAME`: 用户姓名（从消息中获取）
-- `ROOM_NAME`: 房间名称或房间号，支持模糊匹配（如 "330" 能匹配到 "信电楼330"）
-- `DATE`: 日期 `YYYY-MM-DD`
-- `START_TIME`: 开始时间 `HH:MM`
-- `END_TIME`: 结束时间 `HH:MM`
+**参数：** `USER_ID` 钉钉用户ID, `USER_NAME` 姓名, `ROOM_NAME` 房间名或房间号（支持模糊匹配），`DATE` YYYY-MM-DD, `START_TIME`/`END_TIME` HH:MM
 
-**返回示例（成功）：**
-```json
-{"success": true, "message": "预约成功！信电楼330 | 2026-07-15 14:00-16:00 | ID: 1001", "reservation_id": 1001}
-```
+**返回（成功）：** `{"success": true, "message": "预约成功！信电楼330 | 2026-07-15 14:00-16:00 | ID: 1001", "reservation_id": 1001}`
 
-**返回示例（冲突，有推荐）：**
-```json
-{
-  "success": false,
-  "message": "信电楼330已被占用，推荐：1. 信电楼317（容量20人）2. ...",
-  "recommendations": [{"name": "信电楼317", "capacity": 20, ...}, ...]
-}
-```
+**返回（冲突，有推荐）：** `{"success": false, "message": "信电楼330已被占用，推荐：1. 信电楼317（容量20人）2. ...", "recommendations": [...]}`
 
-**重要：** 如果返回 `"success": false` 且包含 `"recommendations"`，直接把 `message` 展示给用户——里面已经包含了推荐信息。
+> 返回 `success: false` 且有 `recommendations` 时，直接把 `message` 展示给用户。
 
 ### 5. 查询我的预约
-
-**用途：** 用户说"我有哪些预约"、"查看我的预约"
 
 ```bash
 cd /opt/ding-robot && python -c "
@@ -200,21 +120,9 @@ print(my_reservations('USER_ID'))
 "
 ```
 
-**返回示例：**
-```json
-{
-  "success": true,
-  "user_id": "user001",
-  "reservations": [
-    {"id": 1, "room_name": "信电楼330", "date": "2026-07-15", "start_time": "14:00", "end_time": "16:00", ...}
-  ],
-  "count": 1
-}
-```
+**返回：** `{"success": true, "reservations": [{"id": 1, "room_name": "信电楼330", "date": "2026-07-15", "start_time": "14:00", "end_time": "16:00"}], "count": 1}`
 
 ### 6. 取消预约
-
-**用途：** 用户说"取消预约1001"、"帮我把那个预约退了"
 
 ```bash
 cd /opt/ding-robot && python -c "
@@ -224,25 +132,13 @@ print(cancel_reservation('USER_ID', RESERVATION_ID))
 "
 ```
 
-**参数：**
-- `USER_ID`: 用户钉钉 ID（只能取消自己的预约）
-- `RESERVATION_ID`: 预约 ID（整数）
+**参数：** `USER_ID` 钉钉用户ID, `RESERVATION_ID` 预约ID（整数）
 
-**返回示例（成功）：**
-```json
-{"success": true, "message": "取消成功！信电楼330 | 2026-07-15 14:00-16:00 | ID: 1 已取消"}
-```
+**返回：** 成功 `{"success": true, "message": "取消成功！..."}` / 失败 `{"success": false, "message": "您只能取消自己的预约..."}`
 
-**返回示例（失败——不是本人的）：**
-```json
-{"success": false, "message": "您只能取消自己的预约，该预约不属于您的账号"}
-```
-
-> 如果用户只说"取消"但没提供预约 ID，先执行"查询我的预约"，把结果列出来让用户选。
+> 用户只说"取消"不提供ID时，先执行"查询我的预约"，列出让用户选。
 
 ### 7. 时间解析辅助（可选）
-
-如果用户用了模糊时间表达（"明天下午"、"傍晚"等），可以用这个函数先解析：
 
 ```bash
 cd /opt/ding-robot && python -c "
@@ -252,60 +148,6 @@ print(json.dumps(parse_fuzzy_datetime('明天下午')))
 "
 ```
 
-**返回示例：**
-```json
-{"date": "2026-07-15", "start_time": "14:00", "end_time": "18:00"}
-```
+**返回：** `{"date": "2026-07-15", "start_time": "14:00", "end_time": "18:00"}`
 
-> 你也可以直接自己解析时间——你本身就能理解"明天下午"是什么意思。这个函数只是提供一个确定性的兜底方案。
-
----
-
-## 时间表达速查
-
-| 用户说 | 解析为 |
-|--------|--------|
-| 上午 | 08:00-12:00 |
-| 中午 | 12:00-14:00 |
-| 下午 | 14:00-18:00 |
-| 傍晚 | 18:00-21:00 |
-| 晚上 | 19:00-22:00 |
-| 现在 | 当前日期 + 当前时段 |
-| 明天/后天 | 当前日期 +1/+2 天 |
-
----
-
-## 学院会议室一览
-
-| 房间 | 容量 | 设备 |
-|------|------|------|
-| 信电楼330 | 30人 | 投影仪、白板、视频会议 |
-| 信电楼317 | 20人 | 投影仪、白板 |
-| 信电楼212 | 10人 | 白板 |
-| 信电楼501 | 50人 | 投影仪、白板、视频会议、音响 |
-| 信电楼108 | 15人 | 投影仪 |
-| 理学院A201 | 25人 | 投影仪、白板、视频会议 |
-| 理学院A305 | 40人 | 投影仪、白板、视频会议、音响 |
-| 理学院B102 | 60人 | 投影仪、白板、视频会议、音响、录音 |
-
----
-
-## 回复风格
-
-- **简洁清晰** — 用自然中文回复，结构化展示信息（分行、emoji 适当使用）
-- **预约成功** — 确认房间、时间、预约 ID
-- **房间冲突** — 直接展示推荐列表，问用户要不要换
-- **查询结果** — 按楼栋分组，房间名 + 容量 + 设备
-- **错误情况** — 友好说明原因，给出建议（如"试试其他时段"）
-- **权限拒绝** — 说明只能操作自己的预约
-- **不理解时** — 引导用户重新描述，举例说明怎么问
-
----
-
-## 注意事项
-
-- **用户身份** — `USER_ID` 和 `USER_NAME` 从钉钉消息中获取，不要编造
-- **权限隔离** — 用户只能取消自己的预约，取消失败时把原因告诉用户
-- **冲突处理** — 不要只报错，要展示推荐的替代房间
-- **数据库路径** — 默认 `db/meeting_rooms.db`，如果部署路径不同，通过 `db_path` 参数指定
-- **不要硬编码日期** — 总是基于当前真实日期来计算"今天""明天""后天"
+> 这个函数是可选的兜底方案——你本身就能理解"明天下午"的意思。

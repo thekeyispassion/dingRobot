@@ -258,31 +258,27 @@ pm2 save
 
 ```
 ddtalk/
-├── SKILL.md                     # OpenClaw 技能说明书（核心——AI 读这个操作数据库）
+├── SKILL.md                     # 纯工具手册——7 个操作的命令+参数+返回值
+├── SOUL.md                      # 说话风格——10 种场景指南+emoji 规范
+├── MEMORY.md                    # 身份约束——"你是会议室助手，必须查数据库"
 ├── skills/                      # 业务逻辑层
 │   ├── db_manager.py            #   数据库连接 + 初始化
 │   ├── time_parser.py           #   模糊时间 → 标准日期
-│   ├── room_query.py            #   空闲查询 + 预约总览
+│   ├── room_query.py            #   空闲查询 + 今日状态 + 日程
 │   ├── booking.py               #   预约 + 冲突检测 + 推荐
 │   └── cancellation.py          #   取消预约 + 权限检查
-├── prompts/                     # LLM 提示词（参考用，OpenClaw AI 会读取）
-│   ├── system_prompt.md         #   系统角色定义
-│   ├── intent_classify.md       #   意图分类规则
-│   └── response_format.md       #   回复格式模板
 ├── cli/
 │   └── test_shell.py            # 命令行测试入口（本地关键词匹配）
 ├── db/
 │   ├── schema.sql               # 建表 SQL
 │   └── seed_data.sql            # 测试种子数据（8 个会议室）
-├── tests/                       # 测试（53 个用例）
+├── tests/                       # 测试（57 个用例）
 │   ├── test_time_parser.py      #   时间解析（13 tests）
-│   ├── test_room_query.py       #   房间查询（7 tests）
+│   ├── test_room_query.py       #   房间查询（11 tests）
 │   ├── test_booking.py          #   预约模块（8 tests）
 │   ├── test_cancellation.py     #   取消管理（6 tests）
 │   └── test_scenarios.py        #   集成测试（19 tests）
 ├── requirements.txt             # 依赖（pytest）
-├── 项目说明.md                  # 项目流程说明
-├── AI 会议室预约助手.md          # 需求文档
 ├── 技术说明.md                  # OpenClaw + 钉钉部署教程
 └── docs/
     └── 开发记录.md              # Vibe Coding 开发记录
@@ -315,7 +311,7 @@ python -m pytest tests/ -v --tb=short | tee test_report.txt
 
 ### 测试模块说明
 
-当前共 **53 个测试用例，100% 通过率**，按模块分布：
+当前共 **57 个测试用例，100% 通过率**，按模块分布：
 
 #### 业务逻辑层测试
 
@@ -363,6 +359,8 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
 │       rooms 表 + reservations 表         │
 └─────────────────────────────────────────┘
 ```
+
+**OpenClaw 配置：** MEMORY.md（身份约束，永不丢失）→ SOUL.md（说话风格）→ SKILL.md（工具手册）。越核心越小，越不易被截断。
 
 **数据流：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → 直接执行 Python 命令 → Skill 操作 SQLite → JSON 结果 → AI 格式化 → 返回钉钉群
 

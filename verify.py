@@ -3,7 +3,7 @@
 
 验证层次：
   L1: 数据库初始化 + 种子数据
-  L2: 全部单元测试（53 个）
+  L2: 全部单元测试（57 个）
   L3: CLI 功能测试
 
 用法: python verify.py
@@ -211,7 +211,7 @@ def test_layer3_cli():
         input="明天下午各会议室的预约情况\nquit\n",
         capture_output=True, text=True, timeout=30
     )
-    check("预约总览", "预约" in result.stdout and ("空闲" in result.stdout or "占用" in result.stdout))
+    check("预约日程", "预约" in result.stdout and "日程" in result.stdout)
 
     return True
 
