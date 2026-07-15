@@ -122,18 +122,35 @@ llm:
 
 > 支持的 LLM 服务商：阿里云百炼（Qwen）、DeepSeek、以及任何兼容 OpenAI `/v1/chat/completions` 协议的服务。
 
-**第五步：对接 OpenClaw**
+**第五步：注册 Skill 到 OpenClaw**
 
-将 `skills/` 目录注册为 OpenClaw 的 Skill 目录：
+项目根目录的 `SKILL.md` 是 OpenClaw 技能的"说明书"——它告诉 OpenClaw 的 AI：
+
+- 有哪些操作可用（查询空闲、预约、取消、总览、个人查询、时间解析）
+- 每个操作对应的 Python 命令（精确到参数）
+- 学院有哪些会议室（容量、设备）
+- 回复风格和注意事项
+
+**注册方式：** 将项目目录软链接到 OpenClaw 的 skills 目录：
+
 ```bash
-openclaw skills register /opt/ddtalk/skills
+ln -s /opt/ddtalk /home/user/.openclaw/workspace/skills/meeting-room
+openclaw skills reload
 ```
 
-将 `prompts/system_prompt.md` 设置为 OpenClaw Agent 的系统提示词：
-```bash
-openclaw config
-# 菜单选择 → Agent → System Prompt → 粘贴 prompts/system_prompt.md 的内容
+OpenClaw 启动后会自动读取 `SKILL.md`。之后用户在钉钉群 @机器人 时：
+
 ```
+用户: @机器人 帮我约明天下午 330
+       ↓
+OpenClaw AI 读取 SKILL.md → 理解意图 → 判断需要"预约会议室"
+       ↓
+执行: cd /opt/ddtalk && python -c "from skills.booking import book_room; ..."
+       ↓
+返回 JSON 结果 → AI 根据 SKILL.md 的回复风格格式化 → 回复钉钉群
+```
+
+> **注意：** 在这种模式下，AI 直接理解用户意图并执行命令，`interfaces/llm_client.py` 的意图分类层不再需要——AI 本身就是最强的意图理解器。`llm_client.py` 仅在 CLI 独立模式（`python cli/test_shell.py`）下作为本地关键词降级方案使用。
 
 **第六步：对接钉钉机器人**
 
@@ -295,6 +312,7 @@ export DDTALK_DINGTALK_MODE="openclaw"
 
 ```
 ddtalk/
+├── SKILL.md                     # OpenClaw 技能说明书（AI 读这个来理解怎么操作）
 ├── interfaces/                  # 接口层
 │   ├── config.py                #   配置管理（YAML + 环境变量）
 │   ├── llm_client.py            #   LLM API 客户端（OpenAI 兼容协议）
@@ -400,17 +418,10 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
                  │
 ┌────────────────┴────────────────────────┐
 │         OpenClaw (小龙虾 Agent)           │
-│  ┌──────────┐  ┌──────────┐              │
-│  │ 钉钉通道  │  │ LLM 调用  │              │
-│  └──────────┘  └──────────┘              │
-└────────────────┬────────────────────────┘
-                 │
-┌────────────────┴────────────────────────┐
-│           interfaces/（接口层）           │
-│  ┌──────────────┐ ┌──────────────────┐  │
-│  │ llm_client   │ │ dingtalk_handler  │  │
-│  │ 意图分类     │ │ 消息解析+回复     │  │
-│  └──────────────┘ └──────────────────┘  │
+│  ┌──────────────────────────────────┐   │
+│  │ AI 读取 SKILL.md → 理解意图       │   │
+│  │ → 直接执行 Python 命令            │   │
+│  └──────────────────────────────────┘   │
 └────────────────┬────────────────────────┘
                  │
 ┌────────────────┴────────────────────────┐
@@ -424,6 +435,8 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
 └─────────────────────────────────────────┘
 ```
 
-**数据流：** 用户 @机器人 → OpenClaw 接收 → LLM 意图分类 → 调用 Skill → SQLite 读写 → 结果格式化 → 返回钉钉群
+**数据流（OpenClaw 模式）：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → 直接执行 Python 命令 → Skill 操作 SQLite → JSON 结果 → AI 格式化 → 返回钉钉群
 
-**技术栈：** Python 3.10+ / SQLite / OpenAI 兼容 LLM API / OpenClaw
+**数据流（CLI 独立模式）：** 用户输入 → `interfaces/llm_client` 关键词匹配意图 → `interfaces/dingtalk_handler` 格式化 → Skill 操作 SQLite → 终端输出
+
+**技术栈：** Python 3.10+ / SQLite / OpenClaw / 钉钉机器人
