@@ -256,10 +256,10 @@ pm2 save
 
 ```
 ddtalk/
+├── MEMORY.md                    # 身份约束——整个项目生效，防注入、必须查数据库
+├── SOUL.md                      # 说话风格——整个项目生效
 ├── meeting_room/                # 会议室预约 Skill
 │   ├── SKILL.md                 #   工具手册——7 个操作的命令+参数+返回值
-│   ├── SOUL.md                  #   说话风格——10 种场景指南+emoji 规范
-│   ├── MEMORY.md                #   身份约束——防注入、必须查数据库
 │   ├── db_manager.py            #   数据库连接 + 初始化
 │   ├── time_parser.py           #   模糊时间 → 标准日期
 │   ├── room_query.py            #   空闲查询 + 今日状态 + 日程
