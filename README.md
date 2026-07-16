@@ -265,24 +265,29 @@ pm2 save
 ddtalk/
 ├── MEMORY.md                    # 身份约束——整个项目生效，防注入、必须查数据库
 ├── SOUL.md                      # 说话风格——整个项目生效
-├── meeting_room/                # 会议室预约 Skill
-│   ├── SKILL.md                 #   工具手册——7 个操作的命令+参数+返回值
+├── meeting_room/                # Skill: 会议室预约
+│   ├── SKILL.md                 #   工具手册——7 个操作
 │   ├── db_manager.py            #   数据库连接 + 初始化
 │   ├── time_parser.py           #   模糊时间 → 标准日期
 │   ├── room_query.py            #   空闲查询 + 今日状态 + 日程
 │   ├── booking.py               #   预约 + 冲突检测 + 推荐
 │   └── cancellation.py          #   取消预约 + 权限检查
-├── tests/                       # 测试 + CLI + 验证（57 个用例）
+├── room_manager/                # Skill: 会议室管理（管理员专用）
+│   ├── SKILL.md                 #   工具手册——5 个操作
+│   ├── admin_check.py           #   管理员权限校验
+│   └── room_crud.py             #   会议室增删改查
+├── tests/                       # 测试 + CLI + 验证（78 个用例）
 │   ├── test_shell.py            #   命令行测试入口
 │   ├── verify.py                #   一键验证脚本
 │   ├── test_time_parser.py      #   时间解析（13 tests）
 │   ├── test_room_query.py       #   房间查询（11 tests）
 │   ├── test_booking.py          #   预约模块（8 tests）
 │   ├── test_cancellation.py     #   取消管理（6 tests）
-│   └── test_scenarios.py        #   集成测试（19 tests）
+│   ├── test_scenarios.py        #   集成测试（19 tests）
+│   └── test_room_crud.py        #   会议室管理（21 tests）
 ├── db/
-│   ├── schema.sql               # 建表 SQL
-│   └── seed_data.sql            # 测试种子数据（8 个会议室）
+│   ├── schema.sql               # 建表 SQL（rooms + reservations + admins）
+│   └── seed_data.sql            # 8 会议室 + 2 预约 + 1 管理员
 ├── requirements.txt             # 生产依赖（无，纯标准库）
 └── requirements-dev.txt         # 开发依赖（pytest）
 ```
