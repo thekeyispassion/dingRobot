@@ -50,8 +50,8 @@ def check(label: str, success: bool, detail: str = ""):
 def test_layer1_db():
     banner("Layer 1: 数据库初始化 + 种子数据")
 
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from skills.db_manager import init_db, seed_data, get_connection
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from meeting_room.db_manager import init_db, seed_data, get_connection
 
     test_db = "db/_verify_test.db"
     if os.path.exists(test_db):
@@ -155,15 +155,15 @@ def test_layer3_cli():
         db_file = "db/meeting_rooms.db"
         if os.path.exists(db_file):
             os.remove(db_file)
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from skills.db_manager import init_db, seed_data
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from meeting_room.db_manager import init_db, seed_data
         init_db(db_file)
         seed_data(db_file)
 
     # Test 1: CLI 启动
     _reset_db()
     result = subprocess.run(
-        [sys.executable, "cli/test_shell.py"], input="quit\n",
+        [sys.executable, "tests/test_shell.py"], input="quit\n",
         capture_output=True, text=True, timeout=30
     )
     check("CLI 启动正常", "AI 会议室预约助手" in result.stdout)
@@ -172,7 +172,7 @@ def test_layer3_cli():
     # Test 2: 帮助命令
     _reset_db()
     result = subprocess.run(
-        [sys.executable, "cli/test_shell.py"], input="help\nquit\n",
+        [sys.executable, "tests/test_shell.py"], input="help\nquit\n",
         capture_output=True, text=True, timeout=30
     )
     check("help 命令", "使用帮助" in result.stdout)
@@ -180,7 +180,7 @@ def test_layer3_cli():
     # Test 3: 预约功能
     _reset_db()
     result = subprocess.run(
-        [sys.executable, "cli/test_shell.py"],
+        [sys.executable, "tests/test_shell.py"],
         input="帮我约明天下午 317\nquit\n",
         capture_output=True, text=True, timeout=30
     )
@@ -189,7 +189,7 @@ def test_layer3_cli():
     # Test 4: 查询空闲
     _reset_db()
     result = subprocess.run(
-        [sys.executable, "cli/test_shell.py"],
+        [sys.executable, "tests/test_shell.py"],
         input="明天下午有哪些空房间？\nquit\n",
         capture_output=True, text=True, timeout=30
     )
@@ -198,7 +198,7 @@ def test_layer3_cli():
     # Test 5: 我的预约
     _reset_db()
     result = subprocess.run(
-        [sys.executable, "cli/test_shell.py"],
+        [sys.executable, "tests/test_shell.py"],
         input="我的预约\nquit\n",
         capture_output=True, text=True, timeout=30
     )
@@ -207,7 +207,7 @@ def test_layer3_cli():
     # Test 6: 预约总览
     _reset_db()
     result = subprocess.run(
-        [sys.executable, "cli/test_shell.py"],
+        [sys.executable, "tests/test_shell.py"],
         input="明天下午各会议室的预约情况\nquit\n",
         capture_output=True, text=True, timeout=30
     )
@@ -229,7 +229,7 @@ def test_layer4_info():
     print(f"     3. 不需要项目内再调用外部 LLM 做意图分类")
     print()
     print(f"  🧪 CLI 测试模式使用内置关键词匹配作为简易替代")
-    print(f"     启动: python cli/test_shell.py")
+    print(f"     启动: python tests/test_shell.py")
     print()
     print(f"  📋 部署到 OpenClaw：")
     print(f"     ln -s $(pwd) ~/.openclaw/workspace/skills/meeting-room")
@@ -269,7 +269,7 @@ def main():
         print(f"  {GREEN}{BOLD}🎉 全部通过！{passed_total}/{total} 项检查通过{RESET}")
         print()
         print(f"  {BOLD}下一步:{RESET}")
-        print(f"  1. 本地测试: python cli/test_shell.py")
+        print(f"  1. 本地测试: python tests/test_shell.py")
         print(f"  2. 部署 OpenClaw: ln -s $(pwd) ~/.openclaw/workspace/skills/meeting-room")
         print(f"  3. 参考 README.md 部署指南完成钉钉机器人接入")
     else:

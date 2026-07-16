@@ -2,8 +2,8 @@
 import pytest
 import json
 import os
-from skills.db_manager import init_db, seed_data, get_connection
-from skills.cancellation import my_reservations, cancel_reservation
+from meeting_room.db_manager import init_db, seed_data, get_connection
+from meeting_room.cancellation import my_reservations, cancel_reservation
 
 TEST_DB = "db/test_cancellation.db"
 

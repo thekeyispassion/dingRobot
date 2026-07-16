@@ -2,8 +2,8 @@
 import pytest
 import json
 import os
-from skills.db_manager import init_db, seed_data, get_connection
-from skills.booking import book_room, recommend_alternatives
+from meeting_room.db_manager import init_db, seed_data, get_connection
+from meeting_room.booking import book_room, recommend_alternatives
 
 TEST_DB = "db/test_booking.db"
 
@@ -22,7 +22,7 @@ def setup_db():
 class TestBookRoom:
     def test_book_available_room(self):
         """正常预约空闲房间"""
-        result = book_room("user001", "张三", "信电楼317", "2026-07-15", "09:00", "11:00", TEST_DB)
+        result = book_room("user001", "张三", "信电楼317", "2026-12-15", "09:00", "11:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is True
         assert "预约成功" in data["message"]
@@ -40,7 +40,7 @@ class TestBookRoom:
 
     def test_book_nonexistent_room(self):
         """预约不存在的房间"""
-        result = book_room("user001", "张三", "幽灵房间999", "2026-07-15", "09:00", "11:00", TEST_DB)
+        result = book_room("user001", "张三", "幽灵房间999", "2026-12-15", "09:00", "11:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is False
 
@@ -53,7 +53,7 @@ class TestBookRoom:
 
     def test_book_reverse_time(self):
         """开始时间晚于结束时间"""
-        result = book_room("user001", "张三", "信电楼317", "2026-07-15", "18:00", "09:00", TEST_DB)
+        result = book_room("user001", "张三", "信电楼317", "2026-12-15", "18:00", "09:00", TEST_DB)
         data = json.loads(result) if isinstance(result, str) else result
         assert data["success"] is False
 

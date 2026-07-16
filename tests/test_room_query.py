@@ -2,8 +2,8 @@
 import pytest
 import json
 import os
-from skills.db_manager import init_db, seed_data, DEFAULT_DB_PATH
-from skills.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
+from meeting_room.db_manager import init_db, seed_data, DEFAULT_DB_PATH
+from meeting_room.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
 
 TEST_DB = "db/test_room_query.db"
 

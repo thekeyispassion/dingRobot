@@ -1,7 +1,7 @@
 """模糊时间解析器 — 单元测试"""
 import pytest
 from datetime import date
-from skills.time_parser import parse_fuzzy_datetime, PERIOD_MAP
+from meeting_room.time_parser import parse_fuzzy_datetime, PERIOD_MAP
 
 
 class TestPeriodMap:
