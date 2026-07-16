@@ -15,3 +15,7 @@ INSERT OR IGNORE INTO rooms (id, name, building, floor, capacity, facilities, st
 INSERT OR IGNORE INTO reservations (id, room_id, user_id, user_name, date, start_time, end_time, status, created_at) VALUES
 (1, 1, 'user002', '李四', '2026-12-15', '14:00', '16:00', 'active', '2026-07-13T10:00:00'),
 (2, 3, 'user003', '王五', '2026-12-15', '09:00', '11:00', 'active', '2026-07-13T09:00:00');
+
+-- 管理员（张三 为默认管理员）
+INSERT OR IGNORE INTO admins (id, user_id, user_name, role, created_at) VALUES
+(1, 'user001', '张三', 'admin', '2026-07-13T00:00:00');

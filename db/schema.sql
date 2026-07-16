@@ -31,3 +31,12 @@ CREATE INDEX IF NOT EXISTS idx_reservations_date_status
 -- 索引：加速按用户查询
 CREATE INDEX IF NOT EXISTS idx_reservations_user
     ON reservations(user_id, status);
+
+-- 管理员表
+CREATE TABLE IF NOT EXISTS admins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL UNIQUE,
+    user_name TEXT NOT NULL,
+    role TEXT DEFAULT 'admin',
+    created_at TEXT NOT NULL
+);
