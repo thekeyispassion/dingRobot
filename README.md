@@ -90,35 +90,39 @@ cd /opt/ding-robot
 python -c "from meeting_room.db_manager import init_db, seed_data; init_db(); seed_data()"
 ```
 
-**第四步：注册 Skill 到 OpenClaw**
+**第四步：创建 OpenClaw Agent 并绑定项目**
 
-项目根目录的 `SKILL.md` 是 OpenClaw 技能的"说明书"——它告诉 OpenClaw 的 AI：
-
-- 有哪些操作可用（查询空闲、预约、取消、总览、个人查询、时间解析）
-- 每个操作对应的 Python 命令（精确到参数）
-- 学院有哪些会议室（容量、设备）
-- 回复风格和注意事项
-
-**注册方式：** 将项目目录软链接到 OpenClaw 的 skills 目录：
+为会议室助手创建独立的 OpenClaw agent，将它的 workspace 指向项目根目录。这样 agent 启动时会自动加载根目录的 `MEMORY.md`（身份约束）、`SOUL.md`（说话风格）和 `meeting_room/SKILL.md`（操作手册）。
 
 ```bash
-ln -s /opt/ding-robot/meeting_room /home/user/.openclaw/workspace/skills/meeting-room
-openclaw skills reload
+# 创建 agent "ding-room"，workspace 指向项目目录
+openclaw agent create ding-room --workspace /opt/ding-robot
+
+# 验证 agent 配置
+openclaw agent list
+# 应显示 ding-room，workspace = /opt/ding-robot
 ```
 
-OpenClaw 启动后会自动读取 `SKILL.md`。之后用户在钉钉群 @机器人 时：
+**为什么用独立 agent？**
+
+项目根目录的 `MEMORY.md` 和 `SOUL.md` 是项目级别的配置文件，OpenClaw 不会在全局自动加载它们。只有创建独立 agent 并把 workspace 指向项目目录时，这些文件才会被加载为 agent 的系统配置。这样：
+- `MEMORY.md` → agent 的身份约束（"你是会议室助手，必须查数据库"）
+- `SOUL.md` → agent 的说话风格
+- `meeting_room/SKILL.md` → agent 可用的技能
+
+之后用户在钉钉群 @机器人 时：
 
 ```
 用户: @机器人 帮我约明天下午 330
        ↓
-OpenClaw AI 读取 SKILL.md → 理解意图 → 判断需要"预约会议室"
+钉钉消息路由到 ding-room agent
        ↓
-执行: cd /opt/ding-robot && python -c "from meeting_room.booking import book_room; ..."
+Agent 读取 MEMORY.md（身份） + SOUL.md（风格） + SKILL.md（操作）
        ↓
-返回 JSON 结果 → AI 根据 SKILL.md 的回复风格格式化 → 回复钉钉群
+理解意图 → 执行: cd /opt/ding-robot && python -c "from meeting_room.booking import book_room; ..."
+       ↓
+JSON 结果 → Agent 按 SOUL.md 的风格格式化 → 回复钉钉群
 ```
-
-> **注意：** OpenClaw 的 AI 本身就是最强的意图理解器——它读取 SKILL.md 后直接判断用户意图并执行对应命令，不需要项目里再调一个外部 LLM 做意图分类。CLI 测试模式下使用内置关键词匹配作为简易替代。
 
 **第五步：对接钉钉机器人**
 
@@ -129,9 +133,12 @@ OpenClaw AI 读取 SKILL.md → 理解意图 → 判断需要"预约会议室"
 4. 开通消息权限
 5. 发布应用版本
 
-然后回到 OpenClaw 配置钉钉通道参数：
+然后配置钉钉通道，将消息路由到 ding-room agent：
+
 ```bash
 openclaw config → Channels → DingTalk
+# 在「Agent」字段填入: ding-room
+# 这样钉钉群的消息会自动路由到会议室助手 agent
 ```
 
 **第六步：启动服务**
