@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "钉钉 AI 表格": {
+      "type": "streamable-http",
+      "url": "https://mcp-gw.dingtalk.com/server/4787175630613ba4cb2a26b0e945d4cd5e1dbe843844070b05bf5019b8aea9ce?key=3062edfe661457c6bf3370492dd580e3"
+    }
+  }
+}

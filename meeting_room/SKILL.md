@@ -1,153 +1,261 @@
 ---
 name: meeting-room
-description: 学院会议室预约助手，通过 Python 脚本操作 SQLite 数据库。查询空闲、预约、取消、日程查看。
+description: 学院会议室预约助手，通过 MCP 工具直接操作钉钉 AI 表格（Base: AI会议室预约助手）。查询空闲、预约、取消、日程查看。
 alwaysActive: true
 ---
 
 # 会议室预约助手 — 操作手册
 
-## 环境信息
+## 数据来源
 
-- 项目根目录: `/opt/ding-robot`
-- Python 路径: `/opt/ding-robot/myven/bin/python`（如用虚拟环境）或系统 Python
-- 数据库路径: `/opt/ding-robot/db/meeting_rooms.db`
-- 所有命令从项目根目录执行: `cd /opt/ding-robot`
+所有操作直接读写钉钉 AI 表格 **「AI会议室预约助手」** 中的 3 张数据表：
 
-## 命令格式
+| 表名 | 用途 |
+|------|------|
+| 会议室信息 | 会议室基本信息（名称、楼栋、楼层、容量、设备、状态、备注） |
+| 预约记录 | 预约流水（会议室[关联]、用户ID、用户姓名、日期、时间范围、状态、创建时间） |
+| 管理员 | 管理员白名单（用户ID、用户姓名、角色、创建时间） |
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.xxx import yyy
-result = yyy(...)
-print(result)
-"
-```
+> 完整表结构见 `deploy-ai-table/SKILL.md`。
 
-> 所有函数返回 JSON 字符串，`print()` 输出后读取结果。
+## 操作方式
+
+Agent 通过 MCP 工具直接读写钉钉 AI 表格。执行前用 ToolSearch 搜索钉钉 AI 表格相关 MCP 工具（关键词: `dingtalk`、`ai_table`、`record`、`field`）。
+
+每个操作描述中包含：
+- **查哪张表**
+- **筛选条件**
+- **读/写什么字段**
+
+Agent 自行将描述转换为对应的 MCP 工具调用。
+
+---
 
 ## 触发规则
 
-当用户消息涉及以下场景时，自动触发：
-
 | 场景 | 关键词/意图 | 执行操作 |
 |------|------------|---------|
-| 预约会议室 | 约、定、订、预约、帮我订、book | 解析时间+房间 → `book_room` |
-| 查询空闲 | 空房间、空闲、有哪些、空着 | 解析时间 → `query_available` |
-| 今日状态 | 现在谁在、当前状态、在用 | `query_today_status` |
-| 预约日程 | 预约情况、谁约了、日程、一览 | 解析日期 → `query_day_schedule` |
-| 我的预约 | 我的预约、我约了、我订了 | `my_reservations` |
-| 取消预约 | 取消、退订、不要了 | 有 ID 直接取消，无 ID 先查再确认 |
-| 询问房间 | 有哪些房间、会议室列表 | 执行数据库查询 |
+| 预约会议室 | 约、定、订、预约、帮我订、book | 解析时间+房间 → 操作4: 预约会议室 |
+| 查询空闲 | 空房间、空闲、有哪些、空着 | 解析时间 → 操作1: 查询空闲房间 |
+| 今日状态 | 现在谁在、当前状态、在用 | 操作2: 今日实时状态 |
+| 预约日程 | 预约情况、谁约了、日程、一览 | 解析日期 → 操作3: 某天预约日程 |
+| 我的预约 | 我的预约、我约了、我订了 | 操作5: 查询我的预约 |
+| 取消预约 | 取消、退订、不要了 | 有记录ID直接取消，无ID先查再确认 |
+| 询问房间 | 有哪些房间、会议室列表 | 查「会议室信息」表 |
 
 ---
 
 ## 可用操作
 
-### 1. 查询空闲房间
+### 操作1: 查询空闲房间
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.room_query import query_available
-print(query_available('DATE', 'START_TIME', 'END_TIME'))
-"
+**业务逻辑：** 给定日期和时段，找出所有状态=可用、且该时段无预约冲突的房间。
+
+**步骤：**
+
+1. **查所有可用房间：** 查「会议室信息」表，筛选 `状态 = '可用'`，获取房间列表
+2. **查冲突预约：** 查「预约记录」表，筛选条件：
+   - `日期 = 目标日期`
+   - `状态 = '已确认'`
+   - `开始时间 < 目标结束时间 AND 结束时间 > 目标开始时间`（时段重叠）
+3. **排除冲突：** 从步骤1的房间列表中，排除步骤2中「会议室」字段关联到的房间
+4. **返回结果：** 剩余房间即为空闲，按楼栋、楼层排序
+
+**参数：** 日期 `YYYY-MM-DD`、开始时间 `HH:MM`、结束时间 `HH:MM`
+
+**返回格式：** `{"success": true, "date": "...", "rooms": [{"name": "信电楼317", "building": "信电楼", "floor": 3, "capacity": 20, "facilities": "投影仪,白板"}, ...], "count": 7}`
+
+---
+
+### 操作2: 今日实时状态
+
+**业务逻辑：** 展示每个房间此刻是否有人使用，以及今天后续的预约。
+
+**步骤：**
+
+1. **获取当前时间：** `日期 = 今天`, `当前时刻 = HH:MM`
+2. **查所有可用房间：** 查「会议室信息」表，筛选 `状态 = '可用'`
+3. **查今日预约：** 查「预约记录」表，筛选 `日期 = 今天`, `状态 = '已确认'`，按 `开始时间` 排序
+4. **判断每个房间状态：**
+   - 找到 `开始时间 <= 当前时刻 < 结束时间` 的预约 → `status = "occupied"`，展示当前使用者
+   - 否则 → `status = "available"`
+   - 收集 `开始时间 > 当前时刻` 的预约 → `upcoming` 列表
+
+**无需参数，自动使用当前时间。**
+
+**返回格式：**
+```json
+{
+  "success": true,
+  "current_time": "15:30",
+  "rooms": [
+    {
+      "name": "信电楼330",
+      "status": "occupied",
+      "current": {"user_name": "李四", "start_time": "14:00", "end_time": "16:00"},
+      "upcoming": []
+    },
+    {
+      "name": "信电楼317",
+      "status": "available",
+      "current": null,
+      "upcoming": [{"user_name": "王五", "start_time": "16:00"}]
+    }
+  ]
+}
 ```
 
-**参数：** `DATE` YYYY-MM-DD, `START_TIME` HH:MM, `END_TIME` HH:MM
+---
 
-**返回：** `{"success": true, "rooms": [{"name": "信电楼317", "building": "信电楼", "floor": 3, "capacity": 20, "facilities": "投影仪,白板"}, ...], "count": 7}`
+### 操作3: 某天预约日程
 
-### 2. 今日实时状态
+**业务逻辑：** 展示某天每间会议室的预约时间线。
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.room_query import query_today_status
-print(query_today_status())
-"
+**步骤：**
+
+1. **查所有可用房间：** 查「会议室信息」表，筛选 `状态 = '可用'`
+2. **查当天预约：** 查「预约记录」表，筛选 `日期 = 目标日期`, `状态 = '已确认'`，按 `开始时间` 排序
+3. **按房间分组：** 将预约按「会议室」字段分组，统计每间房的 booking_count
+4. **booking_count == 0 → 全天可约**
+
+**参数：** 日期 `YYYY-MM-DD`
+
+**返回格式：** `{"success": true, "date": "...", "rooms": [{"name": "信电楼330", "bookings": [...], "booking_count": 1}, ...], "total_bookings": 5}`
+
+---
+
+### 操作4: 预约会议室
+
+**业务逻辑：** 预约指定房间+时段，自动冲突检测和替代推荐。
+
+**步骤：**
+
+1. **参数校验：**
+   - `开始时间 >= 结束时间` → 拒绝
+   - `日期 < 今天` → 拒绝
+
+2. **查找房间：** 查「会议室信息」表，筛选 `状态 = '可用'`
+   - 先精确匹配「会议室名称」
+   - 找不到则模糊匹配（名称包含输入关键词）
+   - 找不到 → 返回"未找到房间"
+
+3. **冲突检测：** 查「预约记录」表，筛选：
+   - `会议室 = 目标房间`
+   - `日期 = 目标日期`
+   - `状态 = '已确认'`
+   - `开始时间 < 目标结束时间 AND 结束时间 > 目标开始时间`
+   - 存在记录 → 冲突
+
+4. **冲突处理（有冲突）：**
+   - 执行操作1「查询空闲房间」，获取同时间段空闲房间
+   - 排除目标房间自身
+   - 按「同楼栋优先、容量相近」排序，取前3个
+   - 返回冲突提示 + 替代推荐列表
+
+5. **无冲突 → 创建预约：** 在「预约记录」表新增一行：
+   - 会议室 = 目标房间（link 字段）
+   - 用户ID = user_id
+   - 用户姓名 = user_name
+   - 日期 = booking_date
+   - 开始时间 = start_time
+   - 结束时间 = end_time
+   - 状态 = '已确认'
+   - 创建时间 = 当前时间
+
+6. **返回预约成功**，包含钉钉自动生成的记录 ID
+
+**参数：** `USER_ID`、`USER_NAME`、房间名（支持模糊）、日期、开始时间、结束时间
+
+**返回（成功）：** `{"success": true, "message": "预约成功！信电楼330 | 2026-07-15 14:00-16:00 | ID: <记录ID>"}`
+
+**返回（冲突）：** `{"success": false, "message": "信电楼330已被占用，推荐：1. 信电楼317（容量20人）...", "recommendations": [...]}`
+
+> 返回 `success: false` 且有 `recommendations` 时，直接把 message 展示给用户。
+
+---
+
+### 操作5: 查询我的预约
+
+**业务逻辑：** 列出某用户所有有效预约。
+
+**步骤：**
+
+1. 查「预约记录」表，筛选 `用户ID = 目标用户`, `状态 = '已确认'`
+2. 按 `日期`、`开始时间` 排序
+3. 「会议室」link 字段自动带出关联房间的名称、楼栋等信息
+
+**参数：** `USER_ID` 钉钉用户ID
+
+**返回：** `{"success": true, "reservations": [{"id": "<记录ID>", "room_name": "信电楼330", "date": "2026-07-15", "start_time": "14:00", "end_time": "16:00"}], "count": 1}`
+
+---
+
+### 操作6: 取消预约
+
+**业务逻辑：** 取消指定预约（仅限本人）。
+
+**步骤：**
+
+1. **查找预约：** 查「预约记录」表，按记录 ID 找到对应行
+   - 不存在 → "未找到预约记录"
+2. **状态检查：** 如果 `状态 = '已取消'` → "该预约已取消，无需重复操作"
+3. **权限检查：** 如果 `用户ID ≠ 当前用户` → "您没有权限取消该预约，您只能取消自己的预约"
+4. **执行取消：** 更新该行 `状态 = '已取消'`
+5. **获取房间名：** 通过「会议室」link 字段获取关联的房间名称（用于友好提示）
+
+**参数：** `USER_ID`、记录 ID
+
+**返回：**
+- 成功: `{"success": true, "message": "取消成功！信电楼330 | 2026-07-15 14:00-16:00 | ID: xxx 已取消"}`
+- 失败: `{"success": false, "message": "..."}`
+
+> 用户只说"取消"不提供记录 ID 时，先执行操作5「查询我的预约」，列出让用户选。
+
+---
+
+### 操作7: 时间解析（辅助）
+
+**业务逻辑：** 将「明天下午」「下周一上午」等自然语言转为标准日期+时段。这是纯计算，不涉及数据读写。
+
+**时段映射：**
+
+| 中文 | 时段 |
+|------|------|
+| 凌晨 | 00:00-06:00 |
+| 早上 | 06:00-08:00 |
+| 上午 | 08:00-12:00 |
+| 中午 | 12:00-14:00 |
+| 下午 | 14:00-18:00 |
+| 傍晚 | 18:00-21:00 |
+| 晚上 | 19:00-22:00 |
+
+**日期偏移：** 今天=0, 明天=+1, 后天=+2, 昨天=-1, 前天=-2
+
+**星期：** 「下周一」→ 下周对应日期，「本周三」→ 本周或下周（已过则下周）
+
+**返回：** `{"date": "2026-07-15", "start_time": "14:00", "end_time": "18:00"}` 或 `{"error": "错误描述"}`
+
+> 这是 Agent 自身的理解能力——你本身就能理解"明天下午"的意思。只在需要精确解析时使用此映射表。
+
+---
+
+## 冲突检测规则
+
+两段时间重叠的判断标准：
+
+```
+预约A: [start_a, end_a)
+预约B: [start_b, end_b)
+重叠条件: start_a < end_b AND end_a > start_b
 ```
 
-无需参数，自动使用当前时间。
+即：两段时间有交集（不含端点恰好相等的情况——16:00 结束和 16:00 开始不冲突）。
 
-**返回：** `{"success": true, "current_time": "15:30", "rooms": [{"name": "信电楼330", "status": "occupied", "current": {"user_name": "李四", "start_time": "14:00", "end_time": "16:00"}, "upcoming": []}, {"name": "信电楼317", "status": "available", "current": null, "upcoming": [{"user_name": "王五", "start_time": "16:00"}]}]}`
+---
 
-- `status`: "occupied" / "available"
-- `current`: 正在进行的预约（谁、到几点）
-- `upcoming`: 今天后续的预约列表
+## MCP 工具发现
 
-### 3. 某天预约日程
+执行前用 ToolSearch 搜索钉钉 AI 表格工具：
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.room_query import query_day_schedule
-print(query_day_schedule('DATE'))
-"
-```
-
-**参数：** `DATE` YYYY-MM-DD
-
-**返回：** `{"success": true, "date": "2026-07-15", "rooms": [{"name": "信电楼330", "bookings": [{"user_name": "李四", "start_time": "09:00", "end_time": "11:00"}], "booking_count": 1}, {"name": "信电楼317", "bookings": [], "booking_count": 0}], "total_bookings": 5}`
-
-`booking_count == 0` = 全天可约。
-
-### 4. 预约会议室
-
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.booking import book_room
-print(book_room('USER_ID', 'USER_NAME', 'ROOM_NAME', 'DATE', 'START_TIME', 'END_TIME'))
-"
-```
-
-**参数：** `USER_ID` 钉钉用户ID, `USER_NAME` 姓名, `ROOM_NAME` 房间名或房间号（支持模糊匹配），`DATE` YYYY-MM-DD, `START_TIME`/`END_TIME` HH:MM
-
-**返回（成功）：** `{"success": true, "message": "预约成功！信电楼330 | 2026-07-15 14:00-16:00 | ID: 1001", "reservation_id": 1001}`
-
-**返回（冲突，有推荐）：** `{"success": false, "message": "信电楼330已被占用，推荐：1. 信电楼317（容量20人）2. ...", "recommendations": [...]}`
-
-> 返回 `success: false` 且有 `recommendations` 时，直接把 `message` 展示给用户。
-
-### 5. 查询我的预约
-
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.cancellation import my_reservations
-print(my_reservations('USER_ID'))
-"
-```
-
-**返回：** `{"success": true, "reservations": [{"id": 1, "room_name": "信电楼330", "date": "2026-07-15", "start_time": "14:00", "end_time": "16:00"}], "count": 1}`
-
-### 6. 取消预约
-
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.cancellation import cancel_reservation
-print(cancel_reservation('USER_ID', RESERVATION_ID))
-"
-```
-
-**参数：** `USER_ID` 钉钉用户ID, `RESERVATION_ID` 预约ID（整数）
-
-**返回：** 成功 `{"success": true, "message": "取消成功！..."}` / 失败 `{"success": false, "message": "您只能取消自己的预约..."}`
-
-> 用户只说"取消"不提供ID时，先执行"查询我的预约"，列出让用户选。
-
-### 7. 时间解析辅助（可选）
-
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from meeting_room.time_parser import parse_fuzzy_datetime
-print(json.dumps(parse_fuzzy_datetime('明天下午')))
-"
-```
-
-**返回：** `{"date": "2026-07-15", "start_time": "14:00", "end_time": "18:00"}`
-
-> 这个函数是可选的兜底方案——你本身就能理解"明天下午"的意思。
+- 关键词：`dingtalk`、`ai_table`、`record`、`search`、`create`、`update`
+- 常见工具名：`search_records`、`get_record`、`create_record`、`update_record`、`list_fields`

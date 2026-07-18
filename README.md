@@ -2,146 +2,89 @@
 
 > 一句话，约一间房。不用找管理员，不用填表单，在钉钉群里 @机器人 说句话就行。
 
-基于 OpenClaw 框架的智能会议室预约系统，以钉钉群机器人形态运行。师生通过 @机器人 + 自然语言即可完成会议室查询、预约、取消等操作。
+基于 OpenClaw 框架的智能会议室预约系统，以钉钉群机器人形态运行。数据存储在钉钉 AI 表格中，通过 MCP 工具直接读写，无需自建数据库。
 
 ---
 
 ## 目录
 
-- [快速开始](#快速开始)
-- [部署指南](#部署指南)
-  - [本地开发环境](#本地开发环境)
-  - [云服务器部署](#云服务器部署)
-- [使用指南](#使用指南)
-  - [命令行测试模式](#命令行测试模式)
-  - [钉钉群使用](#钉钉群使用)
-  - [支持的表达方式](#支持的表达方式)
 - [项目结构](#项目结构)
-- [运行测试](#运行测试)
+- [部署指南](#部署指南)
+- [使用指南](#使用指南)
 - [技术架构](#技术架构)
-- [OpenClaw 配置说明](#openclaw-配置说明)
+- [配置说明](#配置说明)
 
 ---
 
-## 快速开始
+## 项目结构
 
-```bash
-# 1. 克隆项目
-git clone <repo-url> && cd ddtalk
-
-# 2. 创建虚拟环境
-python3 -m venv myven && source myven/bin/activate
-
-# 3. 安装依赖
-pip install -r requirements-dev.txt  # 仅开发测试需要
-
-# 4. 启动命令行测试
-python tests/test_shell.py
 ```
+ddtalk/
+├── MEMORY.md                    # 身份约束——防注入、必须查数据
+├── SOUL.md                      # 说话风格——10 种场景指南
+├── meeting_room/                # Skill: 会议室预约（7 个操作）
+│   └── SKILL.md                 #   操作手册——MCP 工具操作钉钉 AI 表格
+├── room_manager/                # Skill: 会议室管理（5 个操作，管理员专用）
+│   └── SKILL.md                 #   操作手册——含权限校验
+└── deploy-ai-table/             # Skill: AI 表格一键部署
+    └── SKILL.md                 #   3 张表的结构定义 + 创建流程
+```
+
+**三个 Skill 的分工：**
+
+| Skill | 用途 | 谁用 |
+|-------|------|------|
+| `deploy-ai-table` | 一键创建钉钉 AI 表格（Base + 3 张 Sheet） | 部署时执行一次 |
+| `meeting_room` | 查询空闲、预约、取消、日程查看 | 所有人 |
+| `room_manager` | 添加/修改/停用/启用会议室 | 管理员专用 |
 
 ---
 
 ## 部署指南
 
-### 本地开发环境
+### 前置条件
 
-**前置条件：** Python 3.10+
+- 云服务器（已安装 OpenClaw + 钉钉通道插件 `@soimy/dingtalk`）
+- 钉钉企业内部机器人应用（已获取 Client ID / Client Secret）
+- 钉钉 AI 表格 MCP 已配置（在 [AI Hub](https://aihub.dingtalk.com/#/mcp) 找到「钉钉 AI 表格」，OpenClaw 自动完成 MCP 连接）
 
-```bash
-# 安装依赖
-pip install -r requirements-dev.txt  # 仅开发测试需要
-
-# 初始化数据库（含种子数据：8 个会议室 + 2 条示例预约）
-python -c "
-from meeting_room.db_manager import init_db, seed_data
-init_db()
-seed_data()
-print('数据库初始化完成')
-"
-```
-
-**启动命令行交互：**
-```bash
-python tests/test_shell.py
-```
-
-
-### 云服务器部署
-
-**前置条件：**
-- 云服务器（阿里云/腾讯云/百度云均可，2核2G 就够）
-- 已安装 OpenClaw（小龙虾 Agent）
-- 已安装钉钉通道插件 `@soimy/dingtalk`
-
-**第一步：上传项目代码**
-```bash
-scp -r ./ddtalk user@your-server-ip:/opt/
-```
-
-**第二步：服务器上安装依赖**
-```bash
-ssh user@your-server-ip
-cd /opt/ding-robot
-# 生产环境无需安装任何依赖——项目仅使用 Python 标准库
-```
-
-**第三步：初始化数据库**
-```bash
-python -c "from meeting_room.db_manager import init_db, seed_data; init_db(); seed_data()"
-```
-
-**第四步：创建 OpenClaw Agent 并绑定项目**
-
-为会议室助手创建独立的 OpenClaw agent，将它的 workspace 指向项目根目录。这样 agent 启动时会自动加载根目录的 `MEMORY.md`（身份约束）、`SOUL.md`（说话风格）和 `meeting_room/SKILL.md`（操作手册）。
+### 第一步：上传项目代码
 
 ```bash
-# 创建 agent "ding-room"，workspace 指向项目目录
-openclaw agent create ding-room --workspace /opt/ding-robot
-
-# 验证 agent 配置
-openclaw agent list
-# 应显示 ding-room，workspace = /opt/ding-robot
+scp -r ./ddtalk user@your-server-ip:/opt/ding-room
 ```
 
-**为什么用独立 agent？**
+### 第二步：创建 OpenClaw Agent
 
-项目根目录的 `MEMORY.md` 和 `SOUL.md` 是项目级别的配置文件，OpenClaw 不会在全局自动加载它们。只有创建独立 agent 并把 workspace 指向项目目录时，这些文件才会被加载为 agent 的系统配置。这样：
-- `MEMORY.md` → agent 的身份约束（"你是会议室助手，必须查数据库"）
-- `SOUL.md` → agent 的说话风格
-- `meeting_room/SKILL.md` → agent 可用的技能
+为会议室助手创建独立 agent，workspace 指向项目目录：
 
-之后用户在钉钉群 @机器人 时：
-
-```
-用户: @机器人 帮我约明天下午 330
-       ↓
-钉钉消息路由到 ding-room agent
-       ↓
-Agent 读取 MEMORY.md（身份） + SOUL.md（风格） + SKILL.md（操作）
-       ↓
-理解意图 → 执行: cd /opt/ding-robot && python -c "from meeting_room.booking import book_room; ..."
-       ↓
-JSON 结果 → Agent 按 SOUL.md 的风格格式化 → 回复钉钉群
+```bash
+openclaw agent create ding-room --workspace /opt/ding-room
 ```
 
-**第五步：对接钉钉机器人**
+Agent 启动时自动加载：
+- `MEMORY.md` → 身份约束（"你是会议室助手，必须查数据"）
+- `SOUL.md` → 说话风格
+- `meeting_room/SKILL.md`、`room_manager/SKILL.md`、`deploy-ai-table/SKILL.md` → 技能
 
-按 `技术说明.md` 完成钉钉开放平台配置：
-1. 创建企业内部机器人应用
-2. 获取 Client ID / Client Secret
-3. 添加机器人能力（Stream 模式）
-4. 开通消息权限
-5. 发布应用版本
+### 第三步：创建钉钉 AI 表格
 
-然后配置钉钉通道，将消息路由到 ding-room agent：
+在 OpenClaw 中对 agent 说：
+
+> 执行 deploy-ai-table skill
+
+Agent 会自动在钉钉中创建 Base「AI会议室预约助手」和 3 张数据表（会议室信息、预约记录、管理员）。
+
+### 第四步：配置钉钉通道
 
 ```bash
 openclaw config → Channels → DingTalk
-# 在「Agent」字段填入: ding-room
-# 这样钉钉群的消息会自动路由到会议室助手 agent
+# Agent 字段填入: ding-room
+# 钉钉群消息自动路由到会议室助手
 ```
 
-**第六步：启动服务**
+### 第五步：启动服务
+
 ```bash
 pm2 start "openclaw start" --name ddtalk
 pm2 save
@@ -151,99 +94,63 @@ pm2 save
 
 ## 使用指南
 
-### 命令行测试模式
+在钉钉群中 @机器人 即可使用：
 
-启动后进入交互界面，模拟钉钉用户对话：
-
-```
-==================================================
-  AI 会议室预约助手 — 命令行测试模式
-==================================================
-  意图分类: 关键词匹配（生产环境由 OpenClaw AI 替代）
-  当前模拟用户: 张三 (user001)
-  输入 'help' 查看帮助, 'quit' 退出
-==================================================
-
-[张三] > 帮我约明天下午 330
-
-✅ 预约成功！信电楼330 | 2026-07-15 14:00-18:00 | ID: 1001
-
-[张三] > 我的预约
-
-📋 您当前有 1 个有效预约：
-  1. 信电楼330 | 2026-07-15 14:00-18:00 | ID: 1001
-如需取消某个预约，请告诉我预约ID。
-
-[张三] > 取消预约 1001
-
-✅ 取消成功！信电楼330 | 2026-07-15 14:00-18:00 | ID: 1001 已取消
-```
-
-**CLI 内置命令：**
-
-| 命令 | 功能 |
-|------|------|
-| `help` | 显示帮助 |
-| `users` | 切换模拟用户（张三/李四/王五） |
-| `quit` | 退出 |
-
----
-
-### 钉钉群使用
-
-在已接入机器人的钉钉群中，@机器人 即可使用：
-
-#### 1. 预约会议室
+### 预约会议室
 ```
 @预约助手 帮我约明天下午 330
 ```
-→ 返回：预约成功信息（房间、时段、预约ID）
+→ 返回预约成功信息（房间、时段、记录 ID）。如冲突则推荐替代房间。
 
-#### 2. 查询空闲房间
+### 查询空闲房间
 ```
 @预约助手 现在有哪些空房间？
 ```
-→ 返回：当前空闲会议室列表（房间名、容量、设备）
+→ 按楼栋分组，显示房间名、容量、设备。
 
-#### 3. 预约总览
+### 今日实时状态
 ```
-@预约助手 明天下午各会议室的预约情况
+@预约助手 现在谁在用会议室？
 ```
-→ 返回：所有房间占用/空闲状态一览
+→ 标注每个房间「使用中」还是「空闲」，显示当前使用者和后续预约。
 
-#### 4. 冲突推荐
+### 预约日程
 ```
-@预约助手 明天下午 330
-# 假设 330 已被占用
+@预约助手 明天有哪些预约？
 ```
-→ 返回：330已满，推荐容量相近的替代房间
+→ 按房间列出全天预约时间线，无预约的房间标注「全天可约」。
 
-#### 5. 查询我的预约
+### 我的预约
 ```
 @预约助手 查看我的预约
 ```
-→ 返回：个人有效预约列表
 
-#### 6. 取消预约
+### 取消预约
 ```
-@预约助手 取消预约 1001
+@预约助手 取消预约 <记录ID>
 ```
-→ 返回：取消确认
 
----
+### 管理会议室（管理员专用）
+```
+@预约助手 添加一间会议室：理学院C502，容量40人，设备是投影仪和白板
+@预约助手 把信电楼330的容量改成50人
+@预约助手 停用信电楼108
+@预约助手 重新启用信电楼108
+```
 
 ### 支持的表达方式
 
-#### 时间表达
+**时间表达：**
+
 | 用户说 | 系统解析 |
 |--------|---------|
 | 明天下午 | 明天 14:00-18:00 |
 | 后天上午 | 后天 08:00-12:00 |
 | 傍晚 | 今天 18:00-21:00 |
-| 下周一 | 下周对应日期的默认时段 |
-| 2026-07-20 | 指定日期的默认时段 |
+| 下周一 | 下周对应日期 |
 
-#### 时段映射
+**时段映射：**
+
 | 中文 | 时段 |
 |------|------|
 | 上午 | 08:00-12:00 |
@@ -252,93 +159,7 @@ pm2 save
 | 傍晚 | 18:00-21:00 |
 | 晚上 | 19:00-22:00 |
 
-#### 房间名称
-- 完整名称：`信电楼330`、`理学院A201`
-- 房间号：`330`、`317`
-- 系统支持模糊匹配，输入 `330` 可以匹配到 `信电楼330`
-
----
-
-## 项目结构
-
-```
-ddtalk/
-├── MEMORY.md                    # 身份约束——整个项目生效，防注入、必须查数据库
-├── SOUL.md                      # 说话风格——整个项目生效
-├── meeting_room/                # Skill: 会议室预约
-│   ├── SKILL.md                 #   工具手册——7 个操作
-│   ├── db_manager.py            #   数据库连接 + 初始化
-│   ├── time_parser.py           #   模糊时间 → 标准日期
-│   ├── room_query.py            #   空闲查询 + 今日状态 + 日程
-│   ├── booking.py               #   预约 + 冲突检测 + 推荐
-│   └── cancellation.py          #   取消预约 + 权限检查
-├── room_manager/                # Skill: 会议室管理（管理员专用）
-│   ├── SKILL.md                 #   工具手册——5 个操作
-│   ├── admin_check.py           #   管理员权限校验
-│   └── room_crud.py             #   会议室增删改查
-├── tests/                       # 测试 + CLI + 验证（78 个用例）
-│   ├── test_shell.py            #   命令行测试入口
-│   ├── verify.py                #   一键验证脚本
-│   ├── test_time_parser.py      #   时间解析（13 tests）
-│   ├── test_room_query.py       #   房间查询（11 tests）
-│   ├── test_booking.py          #   预约模块（8 tests）
-│   ├── test_cancellation.py     #   取消管理（6 tests）
-│   ├── test_scenarios.py        #   集成测试（19 tests）
-│   └── test_room_crud.py        #   会议室管理（21 tests）
-├── db/
-│   ├── schema.sql               # 建表 SQL（rooms + reservations + admins）
-│   └── seed_data.sql            # 8 会议室 + 2 预约 + 1 管理员
-├── requirements.txt             # 生产依赖（无，纯标准库）
-└── requirements-dev.txt         # 开发依赖（pytest）
-```
-
----
-
-## 运行测试
-
-### 一键验证
-
-```bash
-python tests/verify.py
-```
-
-运行 4 层检验：数据库初始化 → 自动化测试 → CLI 功能测试 → LLM 配置检查。
-
-### 手动运行
-
-```bash
-# 运行全部测试
-python -m pytest tests/ -v
-
-# 运行指定模块
-python -m pytest tests/test_booking.py -v
-
-# 生成测试报告
-python -m pytest tests/ -v --tb=short | tee test_report.txt
-```
-
-### 测试模块说明
-
-当前共 **57 个测试用例，100% 通过率**，按模块分布：
-
-#### 业务逻辑层测试
-
-| 模块 | 文件 | 用例数 | 测试内容 |
-|------|------|--------|---------|
-| 时间解析 | `test_time_parser.py` | 13 | 时段映射、今天/明天/后天、上午/下午/傍晚、下周一、空输入、乱码输入、房间号干扰 |
-| 房间查询 | `test_room_query.py` | 11 | 空闲查询（空时段/冲突/重叠/边界）、今日实时状态（当前占用+后续预约）、预约日程（时间线+空日）、模糊查找房间 |
-| 预约核心 | `test_booking.py` | 8 | 正常预约、冲突检测+推荐、不存在房间、过去日期、时间倒置、相邻时段不互斥、推荐排序、全部满房 |
-| 取消管理 | `test_cancellation.py` | 6 | 查我的预约、无预约用户、取消自己的、取消别人的（权限拒绝）、取消不存在的、重复取消 |
-| 集成测试 | `test_scenarios.py` | 19 | TC01-TC19：端到端覆盖基础预约(3)、空闲查询(2)、总览(1)、模糊时间(3)、冲突推荐(2)、个人管理(3)、边界情况(3)、额外边界(2) |
-
-#### 测试命名规范
-
-所有集成测试使用 TC 编号（TC01-TC19），方法名包含编号和场景描述，方便在测试报告中快速定位：
-
-```
-tests/test_scenarios.py::TestBasicBooking::test_tc01_book_available_room_success
-tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
-```
+**房间名称：** 支持完整名称（信电楼330）和房间号（330）模糊匹配。
 
 ---
 
@@ -353,48 +174,37 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
 │         OpenClaw (小龙虾 Agent)           │
 │  ┌──────────────────────────────────┐   │
 │  │ AI 读取 SKILL.md → 理解意图       │   │
-│  │ → 直接执行 Python 命令            │   │
+│  │ → 调用 MCP 工具操作钉钉 AI 表格   │   │
 │  └──────────────────────────────────┘   │
 └────────────────┬────────────────────────┘
-                 │
+                 │  MCP (Streamable HTTP)
 ┌────────────────┴────────────────────────┐
-│            meeting_room/（业务逻辑层）          │
-│  booking │ query │ cancellation │ time  │
-└────────────────┬────────────────────────┘
-                 │
-┌────────────────┴────────────────────────┐
-│            SQLite（数据层）              │
-│       rooms 表 + reservations 表         │
+│          钉钉 AI 表格（数据层）           │
+│  Base: AI会议室预约助手                  │
+│  ├── 会议室信息（7 字段）                 │
+│  ├── 预约记录（8 字段，含关联）            │
+│  └── 管理员（4 字段）                     │
 └─────────────────────────────────────────┘
 ```
 
-**OpenClaw 配置：** MEMORY.md（身份约束，永不丢失）→ SOUL.md（说话风格）→ SKILL.md（工具手册）。越核心越小，越不易被截断。
+**数据流：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → 通过 MCP 工具读写钉钉 AI 表格 → AI 按 SOUL.md 的风格格式化 → 回复钉钉群
 
-**数据流：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → 直接执行 Python 命令 → Skill 操作 SQLite → JSON 结果 → AI 格式化 → 返回钉钉群
-
-**技术栈：** Python 3.10+ / SQLite / OpenClaw / 钉钉机器人
+**技术栈：** OpenClaw / 钉钉 AI 表格 / MCP / 钉钉机器人
 
 ---
 
-## OpenClaw 配置说明
+## 配置说明
 
-项目使用三层文件配置 OpenClaw，各司其职：
+### 三层配置文件
 
 | 文件 | 大小 | 职责 | 被截风险 |
 |------|------|------|---------|
-| `MEMORY.md` | ~40 行 | 身份定义 + 核心约束（"你是会议室助手，必须查数据库"） | 几乎为零 |
-| `SOUL.md` | ~60 行 | 说话风格（10 种场景指南 + 回复语气 + emoji 规范） | 低 |
-| `SKILL.md` | ~110 行 | 工具手册（7 个操作的命令模板 + 参数 + 返回值） | 中 |
+| `MEMORY.md` | ~40 行 | 身份定义 + 核心约束（"你是会议室助手，必须查数据"） | 几乎为零 |
+| `SOUL.md` | ~60 行 | 说话风格（10 种场景指南 + emoji 规范） | 低 |
+| `SKILL.md` ×3 | ~400 行 | 工具手册（操作步骤 + 表结构 + 权限规则） | 中 |
 
-**为什么拆成三个文件？**
+**为什么拆成多个文件？**
 
-1. **上下文超限安全** — 会话长了 SKILL.md 可能被截断，但 MEMORY.md 只有几行，几乎不会被截。即使忘了怎么操作，至少知道不能编造数据
+1. **上下文超限安全** — 会话长了 SKILL.md 可能被截断，但 MEMORY.md 只有几十行，几乎不会被截。即使忘了怎么操作，至少知道不能编造数据
 2. **身份持久性** — MEMORY.md 定义"你是谁"，跨会话生效；SKILL.md 只是"工具说明书"
-3. **关注点分离** — 改说话风格只改 SOUL.md，改命令只改 SKILL.md，互不干扰
-
-**部署：** 三个文件放在项目根目录，OpenClaw 自动加载。软链接到 skills 目录后即可使用：
-
-```bash
-ln -s /opt/ding-robot/meeting_room ~/.openclaw/workspace/skills/meeting-room
-openclaw skills reload
-```
+3. **关注点分离** — 改说话风格只改 SOUL.md，改操作只改 SKILL.md，互不干扰

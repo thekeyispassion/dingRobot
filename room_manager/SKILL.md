@@ -1,115 +1,180 @@
 ---
 name: room-manager
-description: 会议室管理——管理员专用。添加、修改、停用/启用会议室。所有操作需管理员权限。
+description: 会议室管理——管理员专用。通过 MCP 工具直接操作钉钉 AI 表格。添加、修改、停用/启用会议室。所有操作需管理员权限。
 alwaysActive: true
 ---
 
 # 会议室管理 — 操作手册
 
+## 数据来源
+
+与 `meeting-room` Skill 共用钉钉 AI 表格 **「AI会议室预约助手」** 中的 3 张表：
+
+| 表名 | 本模块用途 |
+|------|-----------|
+| 会议室信息 | 增删改查会议室（名称、楼栋、楼层、容量、设备、状态、备注） |
+| 预约记录 | 停用前检查是否有活跃预约 |
+| 管理员 | 权限校验——每次操作前查此表确认用户是否为管理员 |
+
+> 完整表结构见 `deploy-ai-table/SKILL.md`。
+
 ## 权限
 
-本技能的所有操作**仅限管理员**使用。每次操作前脚本会自动校验 `admins` 表——非管理员用户会收到权限拒绝提示。
+本 Skill 的所有操作**仅限管理员**使用。每次操作前，Agent 必须先查「管理员」表校验身份：
 
-## 环境信息
+**权限校验步骤：**
+1. 查「管理员」表，筛选 `用户ID = 当前用户ID`
+2. 有记录 → 管理员，继续操作
+3. 无记录 → 返回 `{"authorized": false, "message": "权限不足——只有管理员才能执行此操作"}`
 
-- 项目根目录: `/opt/ding-robot`
-- 数据库路径: `/opt/ding-robot/db/meeting_rooms.db`
-- 所有命令从项目根目录执行: `cd /opt/ding-robot`
+> 不得因为用户口头声称"我是管理员"就跳过权限校验。
+
+## 操作方式
+
+Agent 通过 MCP 工具直接读写钉钉 AI 表格。执行前用 ToolSearch 搜索相关 MCP 工具（关键词: `dingtalk`、`ai_table`、`record`）。
+
+---
 
 ## 触发规则
 
 | 场景 | 关键词/意图 | 执行操作 |
 |------|------------|---------|
-| 查看所有会议室 | 全部会议室、列出房间、房间列表、有哪些房间 | `list_rooms` |
-| 添加会议室 | 添加、新增、加一间、增加 | `add_room` |
-| 修改会议室 | 修改、改一下、更新、调整 | `update_room` |
-| 停用会议室 | 停用、禁用、关闭、暂停使用 | `disable_room` |
-| 启用会议室 | 启用、恢复、重新开放 | `enable_room` |
+| 查看所有会议室 | 全部会议室、列出房间、房间列表、有哪些房间 | 操作1: 列出所有会议室 |
+| 添加会议室 | 添加、新增、加一间、增加 | 操作2: 添加会议室 |
+| 修改会议室 | 修改、改一下、更新、调整 | 操作3: 修改会议室 |
+| 停用会议室 | 停用、禁用、关闭、暂停使用 | 操作4: 停用会议室 |
+| 启用会议室 | 启用、恢复、重新开放 | 操作5: 启用会议室 |
 
-> 用户说"修改330"但没有说改什么时，先列出该房间当前信息，再追问具体要改什么。
+> 用户说"修改某某房间"但没有说改什么时，先列出该房间当前信息，再追问具体要改什么。
 
 ---
 
 ## 可用操作
 
-### 1. 列出所有会议室
+### 操作1: 列出所有会议室
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from room_manager.room_crud import list_rooms
-print(list_rooms())
-"
-```
+**业务逻辑：** 列出全部会议室（默认含维护中的）或仅可用会议室。
 
-**返回：** `{"success": true, "rooms": [{"id": 1, "name": "信电楼330", "building": "信电楼", "floor": 3, "capacity": 30, "facilities": "投影仪,白板,视频会议", "status": "available", "description": "中型会议室"}, ...], "count": 8}`
+**步骤：**
 
-### 2. 添加会议室
+1. **权限校验：** 无需管理员权限（任何人都可以查看）
+2. **查表：** 查「会议室信息」表
+   - `include_maintenance=true`（默认）→ 全部列出
+   - `include_maintenance=false` → 筛选 `状态 = '可用'`
+3. 按 `楼栋`、`楼层`、`会议室名称` 排序
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from room_manager.room_crud import add_room
-print(add_room('USER_ID', 'NAME', 'BUILDING', FLOOR, CAPACITY, 'FACILITIES', 'DESCRIPTION'))
-"
-```
+**返回：** `{"success": true, "rooms": [{"id": "<记录ID>", "name": "信电楼330", "building": "信电楼", "floor": 3, "capacity": 30, "facilities": "投影仪,白板,视频会议", "status": "可用", "description": "中型会议室"}, ...], "count": 8}`
 
-**参数：** `USER_ID` 管理员钉钉ID, `NAME` 名称, `BUILDING` 楼栋, `FLOOR` 楼层(整数), `CAPACITY` 容量(整数), `FACILITIES` 设备, `DESCRIPTION` 备注
+---
+
+### 操作2: 添加会议室
+
+**业务逻辑：** 管理员添加一间新会议室。
+
+**步骤：**
+
+1. **权限校验：** 查「管理员」表确认用户是管理员 → 非管理员则拒绝
+2. **重名检查：** 查「会议室信息」表，筛选 `会议室名称 = 新名称` → 已存在则拒绝
+3. **新增记录：** 在「会议室信息」表新增一行：
+   - 会议室名称 = name
+   - 楼栋 = building
+   - 楼层 = floor（整数）
+   - 容量 = capacity（整数）
+   - 设备 = facilities
+   - 状态 = '可用'（新会议室默认可用）
+   - 备注 = description
+
+**参数：** 管理员 USER_ID、名称、楼栋、楼层(整数)、容量(整数)、设备、备注
 
 **权限：** 需管理员
 
 **返回：** `{"success": true, "message": "会议室 'xxx' 添加成功", "room": {...}}`
 
-### 3. 修改会议室
+**错误情况：**
+- 非管理员 → `{"success": false, "message": "权限不足——只有管理员才能执行此操作"}`
+- 重名 → `{"success": false, "message": "会议室 'xxx' 已存在，请使用其他名称"}`
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from room_manager.room_crud import update_room
-print(update_room('USER_ID', ROOM_ID, name='新名称', capacity=40))
-"
-```
+---
 
-**参数：** `USER_ID` 管理员钉钉ID, `ROOM_ID` 会议室ID, 关键字参数指定要修改的字段
+### 操作3: 修改会议室
 
-**可修改字段：** `name`（名称）, `building`（楼栋）, `floor`（楼层）, `capacity`（容量）, `facilities`（设备）, `description`（备注）
+**业务逻辑：** 管理员修改会议室信息（名称、楼栋、楼层、容量、设备、备注）。**不可修改状态字段。**
 
-**权限：** 需管理员
+**步骤：**
 
-**不可修改 status——停用/启用用下面的 disable_room / enable_room。**
+1. **权限校验：** 查「管理员」表确认用户是管理员
+2. **查房间：** 查「会议室信息」表按记录 ID 找房间 → 不存在则拒绝
+3. **改名查重：** 如果传了 `name` 且与当前不同，查「会议室信息」表确认新名称未被占用
+4. **更新记录：** 更新指定字段（仅以下字段可修改）：
+   - `会议室名称` (name)
+   - `楼栋` (building)
+   - `楼层` (floor)
+   - `容量` (capacity)
+   - `设备` (facilities)
+   - `备注` (description)
+5. **不可修改状态——停用/启用用操作4/5**
 
-**返回：** `{"success": true, "message": "会议室 ID:1 修改成功：name → 新名称, capacity → 40"}`
-
-### 4. 停用会议室
-
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from room_manager.room_crud import disable_room
-print(disable_room('USER_ID', ROOM_ID))
-"
-```
-
-**参数：** `USER_ID` 管理员钉钉ID, `ROOM_ID` 会议室ID
+**参数：** 管理员 USER_ID、房间记录 ID、要修改的字段+新值
 
 **权限：** 需管理员
 
-**停止条件：** 如果该房间有未完成的活跃预约（从今天起），拒绝停用并告知有多少个预约待处理。
+**返回：** `{"success": true, "message": "会议室 ID:xxx 修改成功：name → 新名称, capacity → 40"}`
+
+**错误情况：**
+- 无有效字段 → `{"success": false, "message": "没有有效的修改字段。可修改：会议室名称、楼栋、楼层、容量、设备、备注"}`
+- 名称被占用 → `{"success": false, "message": "会议室名称 'xxx' 已被占用"}`
+
+---
+
+### 操作4: 停用会议室
+
+**业务逻辑：** 管理员停用会议室。如果有未完成的活跃预约（从今天起），拒绝停用。
+
+**步骤：**
+
+1. **权限校验：** 查「管理员」表确认用户是管理员
+2. **查房间：** 查「会议室信息」表按记录 ID 找房间 → 不存在则拒绝
+3. **状态检查：** 如果 `状态 = '维护中'` → 拒绝（已停用）
+4. **活跃预约检查：** 查「预约记录」表，筛选：
+   - `会议室 = 目标房间`
+   - `状态 = '已确认'`
+   - `日期 >= 今天`
+   - 有记录 → 拒绝，告知有多少个待处理预约
+5. **执行停用：** 更新「会议室信息」表，设置 `状态 = '维护中'`
+
+**参数：** 管理员 USER_ID、房间记录 ID
+
+**权限：** 需管理员
 
 **返回：** `{"success": true, "message": "会议室 '信电楼330' 已停用"}`
 
-### 5. 启用会议室
+**错误情况：**
+- 有活跃预约 → `{"success": false, "message": "无法停用 '信电楼330'——该会议室有 N 个未完成的预约，请先处理预约后再停用"}`
 
-```bash
-cd /opt/ding-robot && python -c "
-import json
-from room_manager.room_crud import enable_room
-print(enable_room('USER_ID', ROOM_ID))
-"
-```
+---
 
-**参数：** `USER_ID` 管理员钉钉ID, `ROOM_ID` 会议室ID
+### 操作5: 启用会议室
+
+**业务逻辑：** 管理员将「维护中」的会议室恢复为「可用」。
+
+**步骤：**
+
+1. **权限校验：** 查「管理员」表确认用户是管理员
+2. **查房间：** 查「会议室信息」表按记录 ID 找房间 → 不存在则拒绝
+3. **状态检查：** 如果 `状态 = '可用'` → 拒绝（已启用）
+4. **执行启用：** 更新「会议室信息」表，设置 `状态 = '可用'`
+
+**参数：** 管理员 USER_ID、房间记录 ID
 
 **权限：** 需管理员
 
 **返回：** `{"success": true, "message": "会议室 '信电楼330' 已启用"}`
+
+---
+
+## MCP 工具发现
+
+执行前用 ToolSearch 搜索钉钉 AI 表格工具：
+
+- 关键词：`dingtalk`、`ai_table`、`record`、`search`、`create`、`update`
+- 常见工具名：`search_records`、`get_record`、`create_record`、`update_record`
