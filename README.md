@@ -36,7 +36,7 @@ python3 -m venv myven && source myven/bin/activate
 pip install -r requirements-dev.txt  # 仅开发测试需要
 
 # 4. 启动命令行测试
-python cli/test_shell.py
+python tests/test_shell.py
 ```
 
 ---
@@ -53,7 +53,7 @@ pip install -r requirements-dev.txt  # 仅开发测试需要
 
 # 初始化数据库（含种子数据：8 个会议室 + 2 条示例预约）
 python -c "
-from skills.db_manager import init_db, seed_data
+from meeting_room.db_manager import init_db, seed_data
 init_db()
 seed_data()
 print('数据库初始化完成')
@@ -62,7 +62,7 @@ print('数据库初始化完成')
 
 **启动命令行交互：**
 ```bash
-python cli/test_shell.py
+python tests/test_shell.py
 ```
 
 
@@ -87,38 +87,42 @@ cd /opt/ding-robot
 
 **第三步：初始化数据库**
 ```bash
-python -c "from skills.db_manager import init_db, seed_data; init_db(); seed_data()"
+python -c "from meeting_room.db_manager import init_db, seed_data; init_db(); seed_data()"
 ```
 
-**第四步：注册 Skill 到 OpenClaw**
+**第四步：创建 OpenClaw Agent 并绑定项目**
 
-项目根目录的 `SKILL.md` 是 OpenClaw 技能的"说明书"——它告诉 OpenClaw 的 AI：
-
-- 有哪些操作可用（查询空闲、预约、取消、总览、个人查询、时间解析）
-- 每个操作对应的 Python 命令（精确到参数）
-- 学院有哪些会议室（容量、设备）
-- 回复风格和注意事项
-
-**注册方式：** 将项目目录软链接到 OpenClaw 的 skills 目录：
+为会议室助手创建独立的 OpenClaw agent，将它的 workspace 指向项目根目录。这样 agent 启动时会自动加载根目录的 `MEMORY.md`（身份约束）、`SOUL.md`（说话风格）和 `meeting_room/SKILL.md`（操作手册）。
 
 ```bash
-ln -s /opt/ding-robot /home/user/.openclaw/workspace/skills/meeting-room
-openclaw skills reload
+# 创建 agent "ding-room"，workspace 指向项目目录
+openclaw agent create ding-room --workspace /opt/ding-robot
+
+# 验证 agent 配置
+openclaw agent list
+# 应显示 ding-room，workspace = /opt/ding-robot
 ```
 
-OpenClaw 启动后会自动读取 `SKILL.md`。之后用户在钉钉群 @机器人 时：
+**为什么用独立 agent？**
+
+项目根目录的 `MEMORY.md` 和 `SOUL.md` 是项目级别的配置文件，OpenClaw 不会在全局自动加载它们。只有创建独立 agent 并把 workspace 指向项目目录时，这些文件才会被加载为 agent 的系统配置。这样：
+- `MEMORY.md` → agent 的身份约束（"你是会议室助手，必须查数据库"）
+- `SOUL.md` → agent 的说话风格
+- `meeting_room/SKILL.md` → agent 可用的技能
+
+之后用户在钉钉群 @机器人 时：
 
 ```
 用户: @机器人 帮我约明天下午 330
        ↓
-OpenClaw AI 读取 SKILL.md → 理解意图 → 判断需要"预约会议室"
+钉钉消息路由到 ding-room agent
        ↓
-执行: cd /opt/ding-robot && python -c "from skills.booking import book_room; ..."
+Agent 读取 MEMORY.md（身份） + SOUL.md（风格） + SKILL.md（操作）
        ↓
-返回 JSON 结果 → AI 根据 SKILL.md 的回复风格格式化 → 回复钉钉群
+理解意图 → 执行: cd /opt/ding-robot && python -c "from meeting_room.booking import book_room; ..."
+       ↓
+JSON 结果 → Agent 按 SOUL.md 的风格格式化 → 回复钉钉群
 ```
-
-> **注意：** OpenClaw 的 AI 本身就是最强的意图理解器——它读取 SKILL.md 后直接判断用户意图并执行对应命令，不需要项目里再调一个外部 LLM 做意图分类。CLI 测试模式下使用内置关键词匹配作为简易替代。
 
 **第五步：对接钉钉机器人**
 
@@ -129,9 +133,12 @@ OpenClaw AI 读取 SKILL.md → 理解意图 → 判断需要"预约会议室"
 4. 开通消息权限
 5. 发布应用版本
 
-然后回到 OpenClaw 配置钉钉通道参数：
+然后配置钉钉通道，将消息路由到 ding-room agent：
+
 ```bash
 openclaw config → Channels → DingTalk
+# 在「Agent」字段填入: ding-room
+# 这样钉钉群的消息会自动路由到会议室助手 agent
 ```
 
 **第六步：启动服务**
@@ -256,29 +263,33 @@ pm2 save
 
 ```
 ddtalk/
-├── MEMORY.md                    # 身份约束——"你是会议室助手，必须查数据库"
-├── SOUL.md                      # 说话风格——10 种场景指南+emoji 规范
-├── SKILL.md                     # 纯工具手册——7 个操作的命令+参数+返回值
-├── verify.py                    # 一键验证脚本
-├── requirements.txt             # 生产依赖（无，纯标准库）
-├── requirements-dev.txt         # 开发依赖（pytest）
-├── db/
-│   ├── schema.sql               # 建表 SQL
-│   └── seed_data.sql            # 测试种子数据（8 个会议室）
-├── skills/
+├── MEMORY.md                    # 身份约束——整个项目生效，防注入、必须查数据库
+├── SOUL.md                      # 说话风格——整个项目生效
+├── meeting_room/                # Skill: 会议室预约
+│   ├── SKILL.md                 #   工具手册——7 个操作
 │   ├── db_manager.py            #   数据库连接 + 初始化
 │   ├── time_parser.py           #   模糊时间 → 标准日期
 │   ├── room_query.py            #   空闲查询 + 今日状态 + 日程
 │   ├── booking.py               #   预约 + 冲突检测 + 推荐
 │   └── cancellation.py          #   取消预约 + 权限检查
-├── cli/
-│   └── test_shell.py            # 命令行测试入口（本地关键词匹配）
-└── tests/                       # 测试（57 个用例）
-    ├── test_time_parser.py      #   时间解析（13 tests）
-    ├── test_room_query.py       #   房间查询（11 tests）
-    ├── test_booking.py          #   预约模块（8 tests）
-    ├── test_cancellation.py     #   取消管理（6 tests）
-    └── test_scenarios.py        #   集成测试（19 tests）
+├── room_manager/                # Skill: 会议室管理（管理员专用）
+│   ├── SKILL.md                 #   工具手册——5 个操作
+│   ├── admin_check.py           #   管理员权限校验
+│   └── room_crud.py             #   会议室增删改查
+├── tests/                       # 测试 + CLI + 验证（78 个用例）
+│   ├── test_shell.py            #   命令行测试入口
+│   ├── verify.py                #   一键验证脚本
+│   ├── test_time_parser.py      #   时间解析（13 tests）
+│   ├── test_room_query.py       #   房间查询（11 tests）
+│   ├── test_booking.py          #   预约模块（8 tests）
+│   ├── test_cancellation.py     #   取消管理（6 tests）
+│   ├── test_scenarios.py        #   集成测试（19 tests）
+│   └── test_room_crud.py        #   会议室管理（21 tests）
+├── db/
+│   ├── schema.sql               # 建表 SQL（rooms + reservations + admins）
+│   └── seed_data.sql            # 8 会议室 + 2 预约 + 1 管理员
+├── requirements.txt             # 生产依赖（无，纯标准库）
+└── requirements-dev.txt         # 开发依赖（pytest）
 ```
 
 ---
@@ -288,7 +299,7 @@ ddtalk/
 ### 一键验证
 
 ```bash
-python verify.py
+python tests/verify.py
 ```
 
 运行 4 层检验：数据库初始化 → 自动化测试 → CLI 功能测试 → LLM 配置检查。
@@ -347,7 +358,7 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
 └────────────────┬────────────────────────┘
                  │
 ┌────────────────┴────────────────────────┐
-│            skills/（业务逻辑层）          │
+│            meeting_room/（业务逻辑层）          │
 │  booking │ query │ cancellation │ time  │
 └────────────────┬────────────────────────┘
                  │
@@ -384,6 +395,6 @@ tests/test_scenarios.py::TestBoundaryCases::test_tc17_reverse_time_range
 **部署：** 三个文件放在项目根目录，OpenClaw 自动加载。软链接到 skills 目录后即可使用：
 
 ```bash
-ln -s /opt/ding-robot ~/.openclaw/workspace/skills/meeting-room
+ln -s /opt/ding-robot/meeting_room ~/.openclaw/workspace/skills/meeting-room
 openclaw skills reload
 ```

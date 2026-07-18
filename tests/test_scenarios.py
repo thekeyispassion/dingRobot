@@ -3,11 +3,11 @@
 import pytest
 import json
 import os
-from skills.db_manager import init_db, seed_data, get_connection
-from skills.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
-from skills.booking import book_room, recommend_alternatives
-from skills.cancellation import my_reservations, cancel_reservation
-from skills.time_parser import parse_fuzzy_datetime
+from meeting_room.db_manager import init_db, seed_data, get_connection
+from meeting_room.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
+from meeting_room.booking import book_room, recommend_alternatives
+from meeting_room.cancellation import my_reservations, cancel_reservation
+from meeting_room.time_parser import parse_fuzzy_datetime
 
 TEST_DB = "db/test_scenarios.db"
 
@@ -32,7 +32,7 @@ class TestBasicBooking:
 
     def test_tc01_book_available_room_success(self):
         """TC01: 正常预约空闲房间 → 预约成功，返回预约ID"""
-        result = json.loads(book_room("user001", "张三", "信电楼317", "2026-07-15", "09:00", "11:00", TEST_DB))
+        result = json.loads(book_room("user001", "张三", "信电楼317", "2026-12-15", "09:00", "11:00", TEST_DB))
         assert result["success"] is True
         assert "预约成功" in result["message"]
         assert result["reservation_id"] is not None
@@ -47,7 +47,7 @@ class TestBasicBooking:
 
     def test_tc03_book_nonexistent_room(self):
         """TC03: 预约不存在的房间 → 友好提示"""
-        result = json.loads(book_room("user001", "张三", "幽灵房间999", "2026-07-15", "09:00", "11:00", TEST_DB))
+        result = json.loads(book_room("user001", "张三", "幽灵房间999", "2026-12-15", "09:00", "11:00", TEST_DB))
         assert result["success"] is False
         assert "message" in result
 
@@ -61,7 +61,7 @@ class TestAvailabilityQuery:
 
     def test_tc04_query_empty_period_all_available(self):
         """TC04: 无预约的时段 → 所有房间空闲"""
-        result = json.loads(query_available("2026-07-15", "09:00", "11:00", TEST_DB))
+        result = json.loads(query_available("2026-12-20", "09:00", "11:00", TEST_DB))
         assert result["success"] is True
         assert result["count"] == 8
 
@@ -214,7 +214,7 @@ class TestBoundaryCases:
 
     def test_tc17_reverse_time_range(self):
         """TC17: 开始时间晚于结束时间 → 拒绝"""
-        result = json.loads(book_room("user001", "张三", "信电楼317", "2026-07-15", "18:00", "09:00", TEST_DB))
+        result = json.loads(book_room("user001", "张三", "信电楼317", "2026-12-15", "18:00", "09:00", TEST_DB))
         assert result["success"] is False
 
 

@@ -1,7 +1,7 @@
 """房间查询模块 — 空闲查询、今日实时状态、日程查询"""
 
 import json
-from skills.db_manager import get_connection
+from meeting_room.db_manager import get_connection
 
 
 def query_available(date: str, start_time: str, end_time: str, db_path: str = None) -> str:

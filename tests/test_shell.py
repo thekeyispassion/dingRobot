@@ -16,11 +16,11 @@ from datetime import date
 # 确保项目根目录在 path 中
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from skills.db_manager import init_db, seed_data
-from skills.time_parser import parse_fuzzy_datetime
-from skills.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
-from skills.booking import book_room, recommend_alternatives
-from skills.cancellation import my_reservations, cancel_reservation
+from meeting_room.db_manager import init_db, seed_data
+from meeting_room.time_parser import parse_fuzzy_datetime
+from meeting_room.room_query import query_available, query_today_status, query_day_schedule, get_room_by_name
+from meeting_room.booking import book_room, recommend_alternatives
+from meeting_room.cancellation import my_reservations, cancel_reservation
 
 
 # ============================================================

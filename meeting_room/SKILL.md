@@ -18,7 +18,7 @@ alwaysActive: true
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.xxx import yyy
+from meeting_room.xxx import yyy
 result = yyy(...)
 print(result)
 "
@@ -49,7 +49,7 @@ print(result)
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.room_query import query_available
+from meeting_room.room_query import query_available
 print(query_available('DATE', 'START_TIME', 'END_TIME'))
 "
 ```
@@ -63,7 +63,7 @@ print(query_available('DATE', 'START_TIME', 'END_TIME'))
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.room_query import query_today_status
+from meeting_room.room_query import query_today_status
 print(query_today_status())
 "
 ```
@@ -81,7 +81,7 @@ print(query_today_status())
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.room_query import query_day_schedule
+from meeting_room.room_query import query_day_schedule
 print(query_day_schedule('DATE'))
 "
 ```
@@ -97,7 +97,7 @@ print(query_day_schedule('DATE'))
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.booking import book_room
+from meeting_room.booking import book_room
 print(book_room('USER_ID', 'USER_NAME', 'ROOM_NAME', 'DATE', 'START_TIME', 'END_TIME'))
 "
 ```
@@ -115,7 +115,7 @@ print(book_room('USER_ID', 'USER_NAME', 'ROOM_NAME', 'DATE', 'START_TIME', 'END_
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.cancellation import my_reservations
+from meeting_room.cancellation import my_reservations
 print(my_reservations('USER_ID'))
 "
 ```
@@ -127,7 +127,7 @@ print(my_reservations('USER_ID'))
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.cancellation import cancel_reservation
+from meeting_room.cancellation import cancel_reservation
 print(cancel_reservation('USER_ID', RESERVATION_ID))
 "
 ```
@@ -143,7 +143,7 @@ print(cancel_reservation('USER_ID', RESERVATION_ID))
 ```bash
 cd /opt/ding-robot && python -c "
 import json
-from skills.time_parser import parse_fuzzy_datetime
+from meeting_room.time_parser import parse_fuzzy_datetime
 print(json.dumps(parse_fuzzy_datetime('明天下午')))
 "
 ```

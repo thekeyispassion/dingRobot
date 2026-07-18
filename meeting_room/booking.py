@@ -2,8 +2,8 @@
 
 import json
 from datetime import date, datetime
-from skills.db_manager import get_connection
-from skills.room_query import get_room_by_name, query_available
+from meeting_room.db_manager import get_connection
+from meeting_room.room_query import get_room_by_name, query_available
 
 
 def _check_conflict(conn, room_id: int, booking_date: str, start_time: str, end_time: str) -> dict:

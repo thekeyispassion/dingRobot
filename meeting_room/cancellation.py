@@ -1,7 +1,7 @@
 """预约管理模块 — 个人查询 & 取消预约"""
 
 import json
-from skills.db_manager import get_connection
+from meeting_room.db_manager import get_connection
 
 
 def my_reservations(user_id: str, db_path: str = None) -> str:
