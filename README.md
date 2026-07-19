@@ -56,11 +56,13 @@ ddtalk/
 | 钉钉 AI 表格 | 数据存储——读写会议室信息、预约记录、管理员 |
 | 钉钉通讯录 | 管理员管理——用户名→userId 解析 |
 
-### 第一步：上传项目代码
+### 第一步：获取项目代码
 
 ```bash
-scp -r ./ddtalk user@your-server-ip:/opt/ding-room
+cd /opt && git clone <Gitee仓库地址> ding-room
 ```
+
+项目路径记作 `/opt/ding-room`，后续 agent 的 `workspace` 指向这里。
 
 ### 第二步：配置 OpenClaw
 
@@ -387,7 +389,7 @@ openclaw config get bindings
 
 **现象：** `openclaw mcp probe` 成功，但 agent 说找不到 MCP 工具
 
-**修复：**
+**修复：scp -r ./ddtalk user@your-server-ip:/opt/ding-room**
 
 ```bash
 # 重载 MCP 运行时缓存
