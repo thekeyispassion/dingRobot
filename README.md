@@ -62,22 +62,103 @@ ddtalk/
 scp -r ./ddtalk user@your-server-ip:/opt/ding-room
 ```
 
-### 第二步：创建 OpenClaw Agent
+### 第二步：配置 OpenClaw
 
-为会议室助手创建独立 agent，workspace 指向项目目录：
+> 以下配置方法来自 OpenClaw 阿里一体机云服务器部署实践。推荐用 Python 脚本操作配置文件（避免 JSON 格式问题）。
 
-```bash
-openclaw agent create ding-room --workspace /opt/ding-room
+#### 2.1 添加 MCP 服务器
+
+在 `~/.openclaw/openclaw.json` 中添加 `mcp.servers`：
+
+```json5
+{
+  mcp: {
+    servers: {
+      "dingtalk-ai-table": {
+        type: "url",
+        transport: "streamable-http",    // ← 必须！钉钉 MCP 不支持 SSE
+        url: "https://mcp-gw.dingtalk.com/server/<你的AI表格MCP地址>",
+      },
+      "dingtalk-contact": {
+        type: "url",
+        transport: "streamable-http",
+        url: "https://mcp-gw.dingtalk.com/server/<你的通讯录MCP地址>",
+      },
+    },
+  },
+}
 ```
 
-Agent 启动时自动加载：
+> ⚠️ **传输协议坑：** 钉钉 MCP Server 使用 `streamable-http` 协议，不是默认的 SSE。不加 `transport` 字段会报 405 错误。
+
+#### 2.2 添加 ding-room Agent 和路由
+
+```json5
+{
+  agents: {
+    list: [
+      { id: "main", /* 原有配置 */ },
+      {
+        id: "ding-room",
+        workspace: "/opt/ding-room",
+        identity: { name: "会议室预约助手", emoji: "🏢" },
+      },
+    ],
+  },
+  // 路由用顶层 bindings，不是 routing 或 routing.rules
+  bindings: [
+    {
+      type: "route",
+      agentId: "ding-room",
+      match: { channel: "dingtalk-connector" },  // 匹配所有钉钉流量
+    },
+  ],
+}
+```
+
+> ⚠️ **路由字段坑：** 多 agent 路由使用顶层 `bindings` 字段，而不是 `routing.rules`。`match` 中 `peer.kind` 可选（`group`/`direct`），但不传 id 可能校验失败，直接用 `channel` 匹配即可。
+
+> ⚠️ **last-good 覆盖坑：** `openclaw doctor --fix` 会自动恢复配置到上一个通过校验的版本。每次改配置后，同步更新 `~/.openclaw/openclaw.json.last-good` 文件，否则重启后改动丢失。
+
+> ⚠️ **JSON 格式坑：** 不要用文本编辑器直接写入包含特殊字符（如 `…` 省略号）的配置。始终用 Python `json.dump()` 等工具确保输出严格合法的 JSON。
+
+#### 2.3 验证配置并重启
+
+```bash
+# 验证配置
+openclaw config validate
+
+# 同时更新 last-good，防止 doctor 回滚
+cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.last-good
+
+# 重启 gateway
+systemctl --user restart openclaw-gateway
+
+# 确认 MCP 连接
+openclaw mcp probe dingtalk-ai-table
+openclaw mcp probe dingtalk-contact
+```
+
+MEMORY.md、SOUL.md 放在 workspace 根目录会自动加载；SKILL.md **必须放在 `skills/` 子目录下**才能被自动发现。
+校验Agent 启动时是否加载：
+
 - `MEMORY.md` → 身份约束（"你是会议室助手，必须查数据"）
 - `SOUL.md` → 说话风格
 - 4 个 SKILL.md → 技能（meeting_room / room_manager / manage-admin / deploy-ai-table）
 
 ### 第三步：创建钉钉 AI 表格
 
-在 OpenClaw 中对 agent 说：
+检查 Base 是否已存在：
+
+```bash
+curl -s -X POST "<你的AI表格MCP地址>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_bases","arguments":{}}}'
+```
+
+如果返回中已有「AI会议室预约助手」，确认表结构一致即可直接使用。
+
+如果不存在，在 OpenClaw 中对 agent 说：
 
 > 执行 deploy-ai-table skill
 
@@ -94,8 +175,8 @@ openclaw config → Channels → DingTalk
 ### 第五步：启动服务
 
 ```bash
-pm2 start "openclaw start" --name ddtalk
-pm2 save
+systemctl --user restart openclaw-gateway
+openclaw status  # 确认: Agents=2, DingTalk=OK
 ```
 
 ---
@@ -226,3 +307,92 @@ pm2 save
 1. **上下文超限安全** — 会话长了 SKILL.md 可能被截断，但 MEMORY.md 只有几十行，几乎不会被截。即使忘了怎么操作，至少知道不能编造数据
 2. **身份持久性** — MEMORY.md 定义"你是谁"，跨会话生效；SKILL.md 只是"工具说明书"
 3. **关注点分离** — 改说话风格只改 SOUL.md，改操作只改 SKILL.md，互不干扰
+
+---
+
+## 常见部署问题
+
+> 以下排障经验来自 OpenClaw 阿里一体机云服务器部署实践。
+
+### ❌ MCP probe 报 405
+
+**现象：** `openclaw mcp probe` 返回 `Non-200 status code (405)`
+
+**原因：** 钉钉 MCP Server 使用 Streamable HTTP 协议，不是默认的 SSE。
+
+**修复：** 在 `openclaw.json` 的 MCP 配置中加 `transport` 字段：
+
+```json5
+{
+  mcp: {
+    servers: {
+      "dingtalk-ai-table": {
+        type: "url",
+        transport: "streamable-http",   // ← 加这一行
+        url: "...",
+      },
+    },
+  },
+}
+```
+
+### ❌ 配置改完重启后丢失
+
+**现象：** 手动编辑 `openclaw.json` 后重启，改动不见了
+
+**原因：** `openclaw doctor --fix` 或 gateway 重启时检测到校验失败，自动从 `openclaw.json.last-good` 恢复
+
+**修复：** 改完配置后同步更新 last-good：
+
+```bash
+# 1. 确认配置校验通过
+openclaw config validate
+
+# 2. 同步更新 last-good
+cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.last-good
+
+# 3. 再重启
+systemctl --user restart openclaw-gateway
+```
+
+### ❌ 配置报 "Invalid input" 但没有具体字段
+
+**现象：** `openclaw config validate` 只返回 `<root>: Invalid input`
+
+**常见原因与修复：**
+
+| 原因 | 修复 |
+|------|------|
+| 用了 `routing.rules` | 改为顶层 `bindings`（见第二步配置说明） |
+| 使用了旧版 JSON 结构 | 先跑一次 `openclaw doctor --fix` 让工具自动格式化为新版 |
+| MCP URL 包含特殊字符 | 用 Python `json.dump()` 写入，不要手动编辑 |
+
+### ❌ 新增 agent 后 DingTalk 消息仍然路由到 main
+
+**现象：** 钉钉消息没有走 ding-room agent，还是 main 在处理
+
+**原因：** 没有添加 `bindings` 路由规则，或 `bindings` 里 `agentId` 拼写错误
+
+**检查：**
+
+```bash
+# 确认 agent 存在
+openclaw config get agents.list
+
+# 确认绑定已生效
+openclaw config get bindings
+```
+
+### ❌ MCP 工具能探到但 agent 调用时报错
+
+**现象：** `openclaw mcp probe` 成功，但 agent 说找不到 MCP 工具
+
+**修复：**
+
+```bash
+# 重载 MCP 运行时缓存
+openclaw mcp reload
+
+# 如果还不行，重启 gateway
+systemctl --user restart openclaw-gateway
+```
