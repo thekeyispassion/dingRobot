@@ -39,7 +39,6 @@ ddtalk/
 └── deploy-ai-table/             # Skill: 通道建表 + 通道配置文件
     ├── SKILL.md                 #   通用建表流程
     └── 钉钉AI表格-配置.md        #   钉钉建表: 字段定义 + MCP + 创建顺序
-    └── SKILL.md                 #   初始化 data/ 文件 + 可选同步到钉钉 AI 表格
 ```
 
 **Skill 分工：**
@@ -296,7 +295,7 @@ openclaw status  # 确认: Agents=2, DingTalk=OK
        └────────────────→└─────────────────┘
 ```
 
-**数据流：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → Read/Edit 本地 data/ markdown 文件 → AI 按 SOUL.md 风格格式化 → 回复钉钉群（附带 AI 表格链接可查看完整数据）
+**数据流：** 用户 @机器人 → OpenClaw AI 读 SKILL.md 理解意图 → Read/Edit 本地 data/ markdown 文件 → 追加操作日志 → AI 按 SOUL.md 风格格式化 → 回复钉钉群。mirror-sync 读操作日志增量同步到外部镜像（如钉钉 AI 表格），核心 Skill 不感知外部通道。
 
 **技术栈：** OpenClaw / Markdown 数据文件 / 钉钉 AI 表格（镜像）/ 钉钉机器人
 

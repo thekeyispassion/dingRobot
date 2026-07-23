@@ -6,7 +6,7 @@
 **目标类型：** Base  
 **Base 名称：** AI会议室预约助手  
 **Base 描述：** 学院会议室预约系统数据  
-**关键工具：** search_bases, create_base, create_sheet, add_field, update_view
+**关键工具：** search_bases, create_base, create_table, create_fields, update_view
 
 ---
 
